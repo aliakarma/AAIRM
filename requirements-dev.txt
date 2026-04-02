@@ -14,5 +14,5 @@ black==24.4.2
 pre-commit==3.7.1
 mkdocs==1.6.0
 mkdocs-material==9.5.27
-mkdocstrings[python]==0.25.1
+mkdocstrings[python]==1.0.3
 python-dotenv==1.0.1
