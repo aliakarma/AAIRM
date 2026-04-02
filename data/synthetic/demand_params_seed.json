@@ -1,0 +1,66 @@
+{
+  "description": "Demand generation parameters for the AAIRM synthetic simulation. See DemandGenerator in aairm/simulation/demand_generator.py.",
+  "paper_reference": "Syed et al. (2025), Section 5.1",
+  "seed": 42,
+  "category_seasonality_amplitude": {
+    "grocery": 0.15,
+    "frozen_food": 0.25,
+    "apparel": 0.4,
+    "cosmetics": 0.2,
+    "dry_fruits": 0.3
+  },
+  "base_demand_range": {
+    "min": 20.0,
+    "max": 200.0,
+    "distribution": "Uniform"
+  },
+  "demand_noise": {
+    "distribution": "LogNormal",
+    "mu": 0.0,
+    "sigma_range": {
+      "min": 0.05,
+      "max": 0.25
+    }
+  },
+  "promotional_uplift": {
+    "fraction_of_days": 0.1,
+    "multiplier_range": {
+      "min": 1.5,
+      "max": 2.5
+    }
+  },
+  "holiday_spikes": [
+    {
+      "name": "Eid_Al_Fitr",
+      "uplift": 2.0,
+      "duration_days": 3
+    },
+    {
+      "name": "Eid_Al_Adha",
+      "uplift": 1.8,
+      "duration_days": 3
+    },
+    {
+      "name": "Ramadan",
+      "uplift": 1.3,
+      "duration_days": 30
+    },
+    {
+      "name": "National_Day",
+      "uplift": 1.4,
+      "duration_days": 2
+    },
+    {
+      "name": "New_Year",
+      "uplift": 1.2,
+      "duration_days": 1
+    }
+  ],
+  "lead_time_delay_probability": 0.15,
+  "partial_fulfillment_probability": 0.05,
+  "partial_fulfillment_range": {
+    "min": 0.5,
+    "max": 0.9
+  },
+  "noisy_ack_probability": 0.03
+}

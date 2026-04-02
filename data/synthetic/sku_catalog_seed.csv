@@ -1,0 +1,11 @@
+sku_id,category,unit_cost,base_demand_day,unit_volume,is_perishable,shelf_life_days,demand_sigma_frac,description
+GRO-1000,grocery,32.69,23.3,0.0558,False,,0.095,Seed SKU for grocery category (example 1)
+GRO-1001,grocery,37.35,108.0,0.136,False,,0.067,Seed SKU for grocery category (example 2)
+FRO-1000,frozen_food,22.25,23.9,0.0828,True,159,0.17,Seed SKU for frozen_food category (example 1)
+FRO-1001,frozen_food,28.94,113.1,0.1552,True,137,0.094,Seed SKU for frozen_food category (example 2)
+APP-1000,apparel,30.28,125.2,0.1026,False,,0.211,Seed SKU for apparel category (example 1)
+APP-1001,apparel,35.51,64.2,0.1622,False,,0.241,Seed SKU for apparel category (example 2)
+COS-1000,cosmetics,18.16,32.1,0.0139,True,532,0.171,Seed SKU for cosmetics category (example 1)
+COS-1001,cosmetics,40.74,114.9,0.0314,True,567,0.066,Seed SKU for cosmetics category (example 2)
+DRY-1000,dry_fruits,16.07,101.7,0.0908,True,245,0.165,Seed SKU for dry_fruits category (example 1)
+DRY-1001,dry_fruits,35.82,26.0,0.0382,True,208,0.247,Seed SKU for dry_fruits category (example 2)

@@ -1,0 +1,53 @@
+version: "3.9"
+
+services:
+  # Run the full paper experiment
+  aairm-experiment:
+    build: .
+    image: aairm:latest
+    container_name: aairm-experiment
+    volumes:
+      - ./experiments/results:/app/experiments/results
+      - ./data/synthetic:/app/data/synthetic
+      - ./checkpoints:/app/checkpoints
+    env_file:
+      - .env
+    command: >
+      python experiments/run_paper_experiment.py
+        --config configs/simulation_1200sku.yaml
+    deploy:
+      resources:
+        limits:
+          memory: 8G
+
+  # Run the full test suite
+  aairm-test:
+    build: .
+    image: aairm:latest
+    container_name: aairm-test
+    command: >
+      python -m pytest tests/unit/ tests/smoke/
+        -v --timeout=120 --no-cov
+
+  # JupyterLab for interactive exploration
+  aairm-notebook:
+    build: .
+    image: aairm:latest
+    container_name: aairm-notebook
+    ports:
+      - "8888:8888"
+    volumes:
+      - ./notebooks:/app/notebooks
+      - ./data/synthetic:/app/data/synthetic
+      - ./experiments/results:/app/experiments/results
+    env_file:
+      - .env
+    command: >
+      jupyter lab
+        --ip=0.0.0.0
+        --port=8888
+        --no-browser
+        --allow-root
+        --NotebookApp.token=''
+        --NotebookApp.password=''
+        --notebook-dir=/app/notebooks

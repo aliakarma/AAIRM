@@ -1,0 +1,70 @@
+# ===========================================================================
+# Ablation: No Negotiation (C4 bypassed — top-ranked supplier used directly)
+# ===========================================================================
+# Expected result: total_cost increases ~3-5% vs. AAIRM.
+
+simulation:
+  n_skus: 1200
+  n_categories: 5
+  category_names: [grocery, frozen_food, apparel, cosmetics, dry_fruits]
+  skus_per_category: 240
+  simulation_horizon_days: 730
+  test_horizon_days: 365
+  n_suppliers_min: 3
+  n_suppliers_max: 5
+  seed: 42
+
+forecasting:
+  architecture: tft
+  forecast_horizon: 7
+  context_length: 60
+  hidden_size: 128
+  attention_head_size: 4
+  dropout: 0.1
+  batch_size: 64
+  max_epochs: 50
+  learning_rate: 0.001
+  loss: mse
+  quantiles: [0.1, 0.5, 0.9]
+
+optimisation:
+  mode: rl
+  budget: 1000000.0
+  warehouse_capacity: 100000.0
+  service_level: 0.95
+  holding_cost_rate: 0.25
+  penalty_cost_multiplier: 3.0
+  discount_factor: 0.99
+  rl_training_episodes: 400
+  rl_learning_rate: 0.0003
+  rl_n_steps: 2048
+  rl_batch_size: 64
+  rl_n_epochs: 10
+
+supplier_ranking:
+  alpha_1: 0.35
+  alpha_2: 0.30
+  alpha_3: 0.25
+  alpha_4: 0.10
+
+governance:
+  max_single_supplier_fraction: 0.60
+  shelf_life_safety_margin: 0.80
+  human_approval_threshold: 50000.0
+  frozen_zone_capacity: 20000.0
+  ambient_zone_capacity: 80000.0
+
+llm:
+  model: gpt-4o
+  temperature: 0.0
+  max_tokens: 1024
+  timeout: 30.0
+
+results_dir: experiments/results/ablation/no_negotiation
+log_level: INFO
+log_format: json
+
+ablation_name: no_negotiation
+ablation_description: "C4 bypassed; top-1 supplier from C3 used without negotiation."
+# Controlled by MetaOrchestrator: skip_negotiation=True
+skip_negotiation: true

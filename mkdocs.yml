@@ -1,0 +1,81 @@
+site_name: AAIRM Documentation
+site_description: Agentic AI Inventory Replenishment and Management — companion code for Syed et al. (2025)
+site_url: https://[author-handle].github.io/aairm/
+repo_url: https://github.com/[author-handle]/aairm
+repo_name: aairm
+edit_uri: edit/main/docs/
+
+theme:
+  name: material
+  palette:
+    - scheme: default
+      primary: indigo
+      accent: blue
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - scheme: slate
+      primary: indigo
+      accent: blue
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - navigation.top
+    - toc.integrate
+    - search.suggest
+    - search.highlight
+    - content.code.copy
+    - content.code.annotate
+
+plugins:
+  - search
+  - mkdocstrings:
+      handlers:
+        python:
+          options:
+            docstring_style: google
+            show_source: true
+            show_root_heading: true
+            show_signature_annotations: true
+            heading_level: 3
+
+nav:
+  - Home: index.md
+  - Installation: installation.md
+  - Quick Start: quickstart.md
+  - Architecture: architecture.md
+  - Agents:
+    - Overview: agents/overview.md
+    - Perception Layer (P1–P5): agents/perception.md
+    - Conceptualization Layer (C1–C5): agents/conceptualization.md
+    - Action Layer (A1–A3): agents/action.md
+  - Datasets: datasets.md
+  - Experiments: experiments.md
+  - API Reference: api/index.md
+
+markdown_extensions:
+  - admonition
+  - pymdownx.details
+  - pymdownx.superfences
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.arithmatex:
+      generic: true
+  - tables
+  - attr_list
+  - def_list
+  - footnotes
+
+extra_javascript:
+  - https://polyfill.io/v3/polyfill.min.js?features=es6
+  - https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js
+
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/[author-handle]/aairm

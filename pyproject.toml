@@ -1,0 +1,156 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.backends.legacy:build"
+
+[project]
+name = "aairm"
+dynamic = ["version"]
+description = "Agentic AI Inventory Replenishment and Management — companion code for 'Agentic Commerce' (Syed et al., 2025)"
+readme = "README.md"
+license = { file = "LICENSE" }
+requires-python = ">=3.10"
+authors = [
+    { name = "Toqeer Ali Syed" },
+    { name = "Hatem M. El-Boghdadi" },
+    { name = "Muhammad Tayyab Naqash", email = "mnaqash@iu.edu.sa" },
+    { name = "Turki Alghamdi" },
+    { name = "Abdulaziz Alshahrani" },
+    { name = "It Ee Lee" },
+    { name = "Ali Akarma" },
+]
+keywords = [
+    "agentic-ai", "inventory-management", "multi-agent-systems",
+    "langchain", "langgraph", "reinforcement-learning",
+    "supply-chain", "retail-ai", "demand-forecasting",
+    "procurement-automation", "llm",
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Scientific/Engineering :: Information Analysis",
+]
+dependencies = [
+    "numpy>=1.26.0",
+    "scipy>=1.12.0",
+    "pandas>=2.1.0",
+    "scikit-learn>=1.4.0",
+    "lightgbm>=4.3.0",
+    "pydantic>=2.5.0",
+    "pydantic-settings>=2.1.0",
+    "omegaconf>=2.3.0",
+    "structlog>=24.1.0",
+    "rich>=13.7.0",
+    "tqdm>=4.66.0",
+    "matplotlib>=3.8.0",
+    "pyarrow>=15.0.0",
+]
+
+[project.optional-dependencies]
+llm = [
+    "langchain>=0.3.0",
+    "langgraph>=0.2.0",
+    "langchain-openai>=0.2.0",
+    "openai>=1.40.0",
+]
+rl = [
+    "torch>=2.2.0",
+    "stable-baselines3>=2.3.0",
+    "gymnasium>=0.29.0",
+]
+forecasting = [
+    "torch>=2.2.0",
+    "pytorch-forecasting>=1.0.0",
+    "pytorch-lightning>=2.0.0",
+]
+datasets = [
+    "kaggle>=1.6.0",
+    "python-dotenv>=1.0.0",
+]
+notebooks = [
+    "jupyterlab>=4.1.0",
+    "ipywidgets>=8.1.0",
+    "seaborn>=0.13.0",
+    "plotly>=5.20.0",
+]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-cov>=5.0.0",
+    "pytest-asyncio>=0.23.0",
+    "pytest-timeout>=2.3.0",
+    "mypy>=1.9.0",
+    "ruff>=0.4.0",
+    "black>=24.4.0",
+    "pre-commit>=3.7.0",
+    "mkdocs>=1.6.0",
+    "mkdocs-material>=9.5.0",
+    "mkdocstrings[python]>=0.24.0",
+    "python-dotenv>=1.0.0",
+]
+all = [
+    "aairm[llm,rl,forecasting,datasets,notebooks,dev]",
+]
+
+[project.urls]
+Homepage    = "https://github.com/[author-handle]/aairm"
+Paper       = "https://doi.org/[DOI-PLACEHOLDER]"
+Documentation = "https://[author-handle].github.io/aairm"
+"Bug Tracker" = "https://github.com/[author-handle]/aairm/issues"
+
+[tool.setuptools.dynamic]
+version = { attr = "aairm.version.__version__" }
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["aairm*"]
+
+# ── Ruff ───────────────────────────────────────────────────────────────────
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "W", "F", "I", "N", "UP", "B", "C4", "SIM"]
+ignore = ["E501", "B008", "N806", "SIM108"]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.ruff.lint.isort]
+known-first-party = ["aairm"]
+
+# ── Black ──────────────────────────────────────────────────────────────────
+[tool.black]
+line-length = 100
+target-version = ["py310", "py311", "py312"]
+
+# ── mypy ───────────────────────────────────────────────────────────────────
+[tool.mypy]
+python_version = "3.10"
+ignore_missing_imports = true
+warn_return_any = false
+warn_unused_configs = true
+
+# ── pytest ─────────────────────────────────────────────────────────────────
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts   = "--cov=aairm --cov-report=term-missing --cov-report=xml -v"
+asyncio_mode = "auto"
+markers = [
+    "slow: marks tests as slow (deselect with -m 'not slow')",
+    "integration: marks integration tests requiring full environment",
+    "llm: marks tests that require a live LLM API key",
+]
+
+# ── coverage ───────────────────────────────────────────────────────────────
+[tool.coverage.run]
+source = ["aairm"]
+omit   = ["aairm/version.py", "tests/*", "scripts/*", "notebooks/*", "experiments/*"]
+
+[tool.coverage.report]
+fail_under   = 80
+show_missing = true

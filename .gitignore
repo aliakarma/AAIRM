@@ -1,0 +1,78 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+.eggs/
+.venv/
+venv/
+env/
+.env
+ENV/
+
+# Data — never commit raw or processed datasets
+data/raw/
+data/processed/
+experiments/results/
+checkpoints/
+*.csv
+*.parquet
+*.feather
+*.h5
+*.hdf5
+*.npz
+# Exception: committed seed files in data/synthetic/
+!data/synthetic/sku_catalog_seed.csv
+!data/synthetic/supplier_catalog_seed.csv
+!data/synthetic/demand_params_seed.json
+
+# Model weights and checkpoints
+*.pt
+*.pth
+*.ckpt
+*.zip
+runs/
+mlruns/
+wandb/
+
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb_checkpoints
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Testing
+.coverage
+coverage.xml
+htmlcov/
+.pytest_cache/
+.mypy_cache/
+
+# MkDocs
+site/
+
+# Secrets — NEVER commit
+.env
+*.key
+*.pem
+kaggle.json
+
+# Ruff
+.ruff_cache/
+
+# Generated figures (re-run reporter to regenerate)
+experiments/results/
