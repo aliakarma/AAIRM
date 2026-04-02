@@ -28,18 +28,23 @@ import time
 import zipfile
 from pathlib import Path
 
+import requests
+
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 # Load .env
 try:
     from dotenv import load_dotenv  # type: ignore
+
     load_dotenv()
 except ImportError:
     pass
 
 DATASETS = {
     "m5": {
+        "source_type": "competition",
         "competition": "m5-forecasting-accuracy",
+        "fallback_dataset": "aryayadav0513/m5-forecasting-accuracy",
         "target_dir": "data/raw/m5",
         "required_files": [
             "sales_train_validation.csv",
@@ -50,7 +55,9 @@ DATASETS = {
         "approx_size_mb": 70,
     },
     "favorita": {
+        "source_type": "competition",
         "competition": "favorita-grocery-sales-forecasting",
+        "fallback_dataset": "siliconx/favoritagrocerysalesforecastingextracted",
         "target_dir": "data/raw/favorita",
         "required_files": [
             "train.csv",
@@ -64,7 +71,8 @@ DATASETS = {
         "approx_size_mb": 370,
     },
     "instacart": {
-        "competition": "instacart-market-basket-analysis",
+        "source_type": "dataset",
+        "dataset": "psparks/instacart-market-basket-analysis",
         "target_dir": "data/raw/instacart",
         "required_files": [
             "orders.csv",
@@ -115,8 +123,7 @@ def download_dataset(name: str, dataset_cfg: dict) -> bool:
 
     if is_already_downloaded(dataset_cfg):
         print(
-            f"  ✓ {name}: all required files already present "
-            f"in {target} — skipping download."
+            f"  ✓ {name}: all required files already present " f"in {target} — skipping download."
         )
         return True
 
@@ -128,13 +135,40 @@ def download_dataset(name: str, dataset_cfg: dict) -> bool:
 
     try:
         import kaggle  # type: ignore
+
         kaggle.api.authenticate()
         t0 = time.time()
-        kaggle.api.competition_download_files(
-            competition=dataset_cfg["competition"],
-            path=str(target),
-            quiet=False,
-        )
+        source_type = dataset_cfg.get("source_type", "competition")
+        if source_type == "competition":
+            try:
+                kaggle.api.competition_download_files(
+                    competition=dataset_cfg["competition"],
+                    path=str(target),
+                    quiet=False,
+                )
+            except requests.exceptions.HTTPError as exc:
+                status = getattr(getattr(exc, "response", None), "status_code", None)
+                fallback = dataset_cfg.get("fallback_dataset")
+                if status == 401 and fallback:
+                    print(
+                        "  Competition access unauthorized (401). "
+                        f"Trying fallback dataset mirror: {fallback}"
+                    )
+                    kaggle.api.dataset_download_files(
+                        dataset=fallback,
+                        path=str(target),
+                        quiet=False,
+                    )
+                else:
+                    raise
+        elif source_type == "dataset":
+            kaggle.api.dataset_download_files(
+                dataset=dataset_cfg["dataset"],
+                path=str(target),
+                quiet=False,
+            )
+        else:
+            raise ValueError(f"Unsupported source_type for {name}: {source_type}")
         elapsed = round(time.time() - t0, 1)
         print(f"  Download complete ({elapsed}s). Extracting ...")
 
@@ -142,13 +176,10 @@ def download_dataset(name: str, dataset_cfg: dict) -> bool:
         for zip_path in target.glob("*.zip"):
             with zipfile.ZipFile(zip_path, "r") as zf:
                 zf.extractall(target)
-            zip_path.unlink()   # remove zip after extraction
+            zip_path.unlink()  # remove zip after extraction
 
         # Verify required files
-        missing = [
-            f for f in dataset_cfg["required_files"]
-            if not (target / f).exists()
-        ]
+        missing = [f for f in dataset_cfg["required_files"] if not (target / f).exists()]
         if missing:
             # Try one level deeper (some competitions nest files)
             for sub in target.iterdir():
@@ -156,6 +187,7 @@ def download_dataset(name: str, dataset_cfg: dict) -> bool:
                     for f in missing[:]:
                         if (sub / f).exists():
                             import shutil
+
                             shutil.move(str(sub / f), str(target / f))
                             missing.remove(f)
 
@@ -166,17 +198,11 @@ def download_dataset(name: str, dataset_cfg: dict) -> bool:
         # Report directory contents
         files = list(target.glob("*.csv"))
         total_mb = sum(f.stat().st_size for f in files) / 1024**2
-        print(
-            f"  ✓ {name}: {len(files)} CSV files, "
-            f"{total_mb:.1f} MB total in {target}"
-        )
+        print(f"  ✓ {name}: {len(files)} CSV files, " f"{total_mb:.1f} MB total in {target}")
         return True
 
     except ImportError:
-        print(
-            "  ERROR: 'kaggle' package not installed.\n"
-            "  Run: pip install kaggle"
-        )
+        print("  ERROR: 'kaggle' package not installed.\n" "  Run: pip install kaggle")
         return False
     except Exception as exc:
         print(f"  ERROR downloading {name}: {exc}")
@@ -200,10 +226,7 @@ def main() -> None:
     if not check_credentials():
         sys.exit(1)
 
-    to_download = (
-        list(DATASETS.keys()) if args.dataset == "all"
-        else [args.dataset]
-    )
+    to_download = list(DATASETS.keys()) if args.dataset == "all" else [args.dataset]
 
     success_all = True
     for name in to_download:

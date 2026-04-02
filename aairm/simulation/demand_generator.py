@@ -26,7 +26,7 @@ from typing import Any
 
 import numpy as np
 
-from aairm.simulation.sku_catalog import SKUCatalog, SKURecord
+from aairm.simulation.sku_catalog import SKUCatalog
 
 # ---------------------------------------------------------------------------
 # Holiday calendar — Saudi retail context (approximate day-of-year)
@@ -34,11 +34,11 @@ from aairm.simulation.sku_catalog import SKUCatalog, SKURecord
 
 # Each entry: (start_doy, duration_days, uplift_multiplier, name)
 _HOLIDAYS: list[tuple[int, int, float, str]] = [
-    (1,   1,  1.2, "New_Year"),
-    (100, 3,  2.0, "Eid_Al_Fitr"),
-    (175, 3,  1.8, "Eid_Al_Adha"),
-    (60,  30, 1.3, "Ramadan"),
-    (272, 2,  1.4, "National_Day"),
+    (1, 1, 1.2, "New_Year"),
+    (100, 3, 2.0, "Eid_Al_Fitr"),
+    (175, 3, 1.8, "Eid_Al_Adha"),
+    (60, 30, 1.3, "Ramadan"),
+    (272, 2, 1.4, "National_Day"),
 ]
 
 # Pre-compute holiday day-of-year lookup for speed
@@ -110,7 +110,16 @@ class DemandGenerator:
         idx = self._idx_of(sku_id)
         if idx is None or day >= self._n_days:
             return 0.0
-        return float(self._demand_matrix[idx, day])
+        expected = float(self._demand_matrix[idx, day])
+        if expected <= 0.0:
+            return 0.0
+
+        # Add online stochasticity so trajectories are not overly smooth.
+        if expected < 50.0:
+            sampled = float(self._rng.poisson(lam=max(expected, 0.1)))
+        else:
+            sampled = float(self._rng.normal(loc=expected, scale=max(0.15 * expected, 1.0)))
+        return float(max(0.0, round(sampled, 2)))
 
     def get_history(self, sku_id: str, n_days: int, up_to_day: int) -> np.ndarray:
         """Return the demand history for one SKU up to (not including) a day.
@@ -176,7 +185,7 @@ class DemandGenerator:
         holiday_boost = _HOLIDAY_UPLIFT.get(doy, 1.0)
         signals = []
 
-        for sku_id in self._sku_ids[:50]:   # top-50 as external trending products
+        for sku_id in self._sku_ids[:50]:  # top-50 as external trending products
             rec = self._catalog.get(sku_id)
             if rec is None:
                 continue

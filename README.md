@@ -82,6 +82,15 @@ pre-commit install
 make smoke
 ```
 
+If `make` is unavailable (common on Windows PowerShell), use direct Python commands:
+
+```powershell
+pip install -e .
+pip install -e ".[dev]"
+pre-commit install
+python -m pytest tests/smoke/ -v --timeout=60
+```
+
 **Optional extras:**
 ```bash
 pip install -e ".[llm]"         # C4 LLM negotiation (requires OpenAI key)
@@ -137,6 +146,13 @@ make generate-synthetic
 make run-paper-experiment
 ```
 
+Windows PowerShell equivalent:
+
+```powershell
+python scripts/generate_synthetic.py
+python experiments/run_paper_experiment.py --config configs/simulation_1200sku.yaml
+```
+
 Expected terminal output:
 ```
 ──────────────────────────────────────────────────────────────
@@ -161,6 +177,15 @@ AAIRM supports three real-world datasets. Download requires Kaggle API credentia
 make download-data        # M5, Favorita, Instacart (~640 MB total)
 make preprocess-data      # feature engineering → data/processed/
 
+python experiments/run_realworld.py --dataset m5
+python experiments/run_realworld.py --dataset favorita
+```
+
+Windows PowerShell equivalent:
+
+```powershell
+python scripts/download_datasets.py
+python scripts/preprocess_all.py
 python experiments/run_realworld.py --dataset m5
 python experiments/run_realworld.py --dataset favorita
 ```

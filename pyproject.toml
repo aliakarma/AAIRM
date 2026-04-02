@@ -1,6 +1,6 @@
 [build-system]
 requires = ["setuptools>=68", "wheel"]
-build-backend = "setuptools.backends.legacy:build"
+build-backend = "setuptools.build_meta:__legacy__"
 
 [project]
 name = "aairm"
@@ -96,10 +96,10 @@ all = [
 ]
 
 [project.urls]
-Homepage    = "https://github.com/[author-handle]/aairm"
-Paper       = "https://doi.org/[DOI-PLACEHOLDER]"
-Documentation = "https://[author-handle].github.io/aairm"
-"Bug Tracker" = "https://github.com/[author-handle]/aairm/issues"
+Homepage    = "https://github.com/aliakarma/AAIRM"
+Paper       = "https://doi.org/10.0000/placeholder"
+Documentation = "https://aliakarma.github.io/AAIRM"
+"Bug Tracker" = "https://github.com/aliakarma/AAIRM/issues"
 
 [tool.setuptools.dynamic]
 version = { attr = "aairm.version.__version__" }

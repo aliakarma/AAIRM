@@ -25,19 +25,28 @@ logger = get_logger(__name__)
 # Paper expected results (Table 2) — used for assertion checks
 PAPER_RESULTS: dict[str, dict[str, float]] = {
     "aairm": {
-        "stockout_rate": 0.039, "fill_rate": 0.978,
-        "avg_inventory": 1.19,  "total_cost": 0.84, "div_index": 0.61,
+        "stockout_rate": 0.039,
+        "fill_rate": 0.978,
+        "avg_inventory": 1.19,
+        "total_cost": 0.84,
+        "div_index": 0.61,
     },
     "baseline1": {
-        "stockout_rate": 0.087, "fill_rate": 0.931,
-        "avg_inventory": 1.45,  "total_cost": 1.00, "div_index": 0.42,
+        "stockout_rate": 0.087,
+        "fill_rate": 0.931,
+        "avg_inventory": 1.45,
+        "total_cost": 1.00,
+        "div_index": 0.42,
     },
     "baseline2": {
-        "stockout_rate": 0.062, "fill_rate": 0.954,
-        "avg_inventory": 1.32,  "total_cost": 0.93, "div_index": 0.47,
+        "stockout_rate": 0.062,
+        "fill_rate": 0.954,
+        "avg_inventory": 1.32,
+        "total_cost": 0.93,
+        "div_index": 0.47,
     },
 }
-TOLERANCE = 0.005   # ±0.5 percentage points
+TOLERANCE = 0.005  # ±0.5 percentage points
 
 
 @dataclass
@@ -96,9 +105,7 @@ class Benchmarker:
     # Public interface
     # ------------------------------------------------------------------
 
-    def run_all(
-        self, assert_paper_results: bool = False
-    ) -> dict[str, BenchmarkResult]:
+    def run_all(self, assert_paper_results: bool = False) -> dict[str, BenchmarkResult]:
         """Run all three policies and return results.
 
         Args:
@@ -122,8 +129,19 @@ class Benchmarker:
             logger.info("benchmarker.running", policy="aairm")
             results["aairm"] = self._run_aairm()
 
+        # Normalise total cost using Baseline 1 as denominator.
+        bl1_raw_cost = None
+        if "baseline1" in results:
+            bl1_raw_cost = float(results["baseline1"].overall.get("total_cost_raw", 0.0))
+        if bl1_raw_cost and bl1_raw_cost > 0.0:
+            for res in results.values():
+                raw_cost = float(res.overall.get("total_cost_raw", 0.0))
+                res.overall["total_cost"] = raw_cost / bl1_raw_cost
+
         if assert_paper_results and "aairm" in results:
             self._assert_results(results)
+
+        self._soft_validate_results(results)
 
         return results
 
@@ -159,47 +177,39 @@ class Benchmarker:
         daily_demand, daily_fulfilled, daily_on_hand = [], [], []
         daily_proc_cost, daily_hold_cost = [], []
         daily_penalty_cost, daily_spoilage_cost = [], []
-        procurement_volumes: dict[str, dict[str, float]] = {
-            cat: {} for cat in self._categories
-        }
+        daily_spoilage_units = []
+        daily_rewards = []
+        procurement_volumes: dict[str, dict[str, float]] = {cat: {} for cat in self._categories}
 
-        for day in range(self._test_days):
+        for _ in range(self._test_days):
             state = AgentState(day=day)
             state = self._orch.run_cycle(state)
 
             # Step environment with approved orders
-            order_dict = {
-                sku: info.get("quantity", 0.0)
-                for sku, info in state.approved_orders.items()
-            }
-            metrics = env.step_agentic(order_dict)
+            metrics = env.step_agentic({})
 
             snap = env.get_inventory_snapshot()
             day_demand = metrics.get("total_demand", 0.0)
             day_stockout = metrics.get("stockout_units", 0.0)
-            day_fulfilled = max(0.0, day_demand - day_stockout)
+            day_fulfilled = metrics.get("fulfilled_units", max(0.0, day_demand - day_stockout))
+            day_expired = metrics.get("expired_units", 0.0)
 
             daily_demand.append(day_demand)
             daily_fulfilled.append(day_fulfilled)
-            daily_on_hand.append(
-                sum(rec.get("on_hand", 0.0) for rec in snap.values())
-            )
+            daily_on_hand.append(sum(rec.get("on_hand", 0.0) for rec in snap.values()))
 
-            # Cost accumulation (approximate from approved orders)
-            proc = sum(
-                float(t.get("order_value", 0.0))
-                for t in state.approved_orders.values()
-            )
+            proc = float(metrics.get("ordering_cost", 0.0))
             hold = sum(
-                float(rec.get("on_hand", 0.0)) * float(rec.get("unit_cost", 5.0))
-                * (0.25 / 365.0)
+                float(rec.get("on_hand", 0.0)) * float(rec.get("unit_cost", 5.0)) * (0.25 / 365.0)
                 for rec in snap.values()
             )
-            pen = day_stockout * 5.0 * 3.0    # avg unit_cost * penalty_mult
+            pen = day_stockout * 5.0 * 3.0  # avg unit_cost * penalty_mult
             daily_proc_cost.append(proc)
             daily_hold_cost.append(hold)
             daily_penalty_cost.append(pen)
-            daily_spoilage_cost.append(0.0)
+            daily_spoilage_cost.append(day_expired * 5.0)
+            daily_spoilage_units.append(day_expired)
+            daily_rewards.append(float(metrics.get("reward", 0.0)))
 
             # Track procurement volumes for diversification
             for sku, terms in state.approved_orders.items():
@@ -210,16 +220,26 @@ class Benchmarker:
                     procurement_volumes[cat][sup] = 0.0
                 procurement_volumes[cat][sup] += vol
 
-        baseline_cost = float(sum(daily_proc_cost) + sum(daily_hold_cost)
-                               + sum(daily_penalty_cost))
+        raw_total_cost = float(
+            sum(daily_proc_cost)
+            + sum(daily_hold_cost)
+            + sum(daily_penalty_cost)
+            + sum(daily_spoilage_cost)
+        )
 
         overall = compute_all_metrics(
-            daily_demand, daily_fulfilled, daily_on_hand,
-            daily_proc_cost, daily_hold_cost,
-            daily_penalty_cost, daily_spoilage_cost,
-            baseline_cost,   # self-normalised; will be adjusted by runner
+            daily_demand,
+            daily_fulfilled,
+            daily_on_hand,
+            daily_proc_cost,
+            daily_hold_cost,
+            daily_penalty_cost,
+            daily_spoilage_cost,
+            1.0,
             procurement_volumes,
         )
+        overall["total_cost_raw"] = raw_total_cost
+        overall["spoilage_rate"] = float(sum(daily_spoilage_units) / max(sum(daily_demand), 1e-9))
 
         return BenchmarkResult(
             policy_name="AAIRM (proposed)",
@@ -229,7 +249,9 @@ class Benchmarker:
                 "demand": np.array(daily_demand),
                 "fulfilled": np.array(daily_fulfilled),
                 "on_hand": np.array(daily_on_hand),
+                "reward_raw": np.array(daily_rewards),
             },
+            rl_curve=[(i, float(v)) for i, v in enumerate(daily_rewards)],
         )
 
     def _run_baseline1(self) -> BenchmarkResult:
@@ -239,12 +261,11 @@ class Benchmarker:
         snap = env.get_inventory_snapshot()
 
         daily_demand, daily_fulfilled, daily_on_hand = [], [], []
-        daily_proc_cost, daily_hold_cost, daily_penalty_cost = [], [], []
-        procurement_volumes: dict[str, dict[str, float]] = {
-            c: {} for c in self._categories
-        }
+        daily_proc_cost, daily_hold_cost, daily_penalty_cost, daily_spoilage_cost = [], [], [], []
+        daily_spoilage_units = []
+        procurement_volumes: dict[str, dict[str, float]] = {c: {} for c in self._categories}
 
-        for day in range(self._test_days):
+        for _ in range(self._test_days):
             snap = env.get_inventory_snapshot()
             orders = self._bl1.get_orders(snap)
 
@@ -257,19 +278,19 @@ class Benchmarker:
                 if supplier:
                     sup_id = str(supplier.get("supplier_id", "UNKNOWN"))
                     cost = qty * float(supplier.get("unit_cost", 5.0))
-                    proc += cost
                     if sup_id not in procurement_volumes[cat]:
                         procurement_volumes[cat][sup_id] = 0.0
                     procurement_volumes[cat][sup_id] += cost
 
             metrics = env.step_agentic(orders)
+            proc = float(metrics.get("ordering_cost", proc))
             day_demand = metrics.get("total_demand", 0.0)
             day_stockout = metrics.get("stockout_units", 0.0)
-            day_fulfilled = max(0.0, day_demand - day_stockout)
+            day_fulfilled = metrics.get("fulfilled_units", max(0.0, day_demand - day_stockout))
+            day_expired = metrics.get("expired_units", 0.0)
 
             hold = sum(
-                float(rec.get("on_hand", 0.0)) * float(rec.get("unit_cost", 5.0))
-                * (0.25 / 365.0)
+                float(rec.get("on_hand", 0.0)) * float(rec.get("unit_cost", 5.0)) * (0.25 / 365.0)
                 for rec in snap.values()
             )
             pen = day_stockout * 5.0 * 3.0
@@ -280,17 +301,29 @@ class Benchmarker:
             daily_proc_cost.append(proc)
             daily_hold_cost.append(hold)
             daily_penalty_cost.append(pen)
+            daily_spoilage_cost.append(day_expired * 5.0)
+            daily_spoilage_units.append(day_expired)
 
-        baseline_cost = float(
-            sum(daily_proc_cost) + sum(daily_hold_cost) + sum(daily_penalty_cost)
+        raw_total_cost = float(
+            sum(daily_proc_cost)
+            + sum(daily_hold_cost)
+            + sum(daily_penalty_cost)
+            + sum(daily_spoilage_cost)
         )
 
         overall = compute_all_metrics(
-            daily_demand, daily_fulfilled, daily_on_hand,
-            daily_proc_cost, daily_hold_cost, daily_penalty_cost, [0.0],
-            baseline_cost, procurement_volumes,
+            daily_demand,
+            daily_fulfilled,
+            daily_on_hand,
+            daily_proc_cost,
+            daily_hold_cost,
+            daily_penalty_cost,
+            daily_spoilage_cost,
+            1.0,
+            procurement_volumes,
         )
-        overall["total_cost"] = 1.00   # baseline is the reference
+        overall["total_cost_raw"] = raw_total_cost
+        overall["spoilage_rate"] = float(sum(daily_spoilage_units) / max(sum(daily_demand), 1e-9))
 
         return BenchmarkResult(
             policy_name="Baseline 1 (ROP–EOQ)",
@@ -311,18 +344,15 @@ class Benchmarker:
         obs, info = env.reset()
 
         daily_demand, daily_fulfilled, daily_on_hand = [], [], []
-        daily_proc_cost, daily_hold_cost, daily_penalty_cost = [], [], []
-        procurement_volumes: dict[str, dict[str, float]] = {
-            c: {} for c in self._categories
-        }
+        daily_proc_cost, daily_hold_cost, daily_penalty_cost, daily_spoilage_cost = [], [], [], []
+        daily_spoilage_units = []
+        procurement_volumes: dict[str, dict[str, float]] = {c: {} for c in self._categories}
 
-        for day in range(self._test_days):
+        for _ in range(self._test_days):
             snap = env.get_inventory_snapshot()
 
             # Build feature matrix for today
-            demand_hist = {
-                sku: env.get_demand_history(sku, 30) for sku in snap.keys()
-            }
+            demand_hist = {sku: env.get_demand_history(sku, 30) for sku in snap}
             X_today = MLStaticPolicy.build_feature_matrix(demand_hist, day)
             forecasts = self._bl2.predict_demand(X_today)
             orders = self._bl2.get_orders(snap, forecasts)
@@ -335,19 +365,20 @@ class Benchmarker:
                 if supplier:
                     sup_id = str(supplier.get("supplier_id", "UNKNOWN"))
                     cost = qty * float(supplier.get("unit_cost", 5.0))
-                    proc += cost
                     if sup_id not in procurement_volumes[cat]:
                         procurement_volumes[cat][sup_id] = 0.0
                     procurement_volumes[cat][sup_id] += cost
 
             metrics = env.step_agentic(orders)
+            proc = float(metrics.get("ordering_cost", proc))
             day_demand = metrics.get("total_demand", 0.0)
             day_stockout = metrics.get("stockout_units", 0.0)
-            day_fulfilled = max(0.0, day_demand - day_stockout)
+            day_fulfilled = metrics.get("fulfilled_units", max(0.0, day_demand - day_stockout))
+            day_expired = metrics.get("expired_units", 0.0)
 
             hold = sum(
-                float(r.get("on_hand", 0.0)) * float(r.get("unit_cost", 5.0))
-                * (0.25 / 365.0) for r in snap.values()
+                float(r.get("on_hand", 0.0)) * float(r.get("unit_cost", 5.0)) * (0.25 / 365.0)
+                for r in snap.values()
             )
             pen = day_stockout * 5.0 * 3.0
 
@@ -357,15 +388,28 @@ class Benchmarker:
             daily_proc_cost.append(proc)
             daily_hold_cost.append(hold)
             daily_penalty_cost.append(pen)
+            daily_spoilage_cost.append(day_expired * 5.0)
+            daily_spoilage_units.append(day_expired)
 
-        baseline_cost = float(
-            sum(daily_proc_cost) + sum(daily_hold_cost) + sum(daily_penalty_cost)
+        raw_total_cost = float(
+            sum(daily_proc_cost)
+            + sum(daily_hold_cost)
+            + sum(daily_penalty_cost)
+            + sum(daily_spoilage_cost)
         )
         overall = compute_all_metrics(
-            daily_demand, daily_fulfilled, daily_on_hand,
-            daily_proc_cost, daily_hold_cost, daily_penalty_cost, [0.0],
-            baseline_cost, procurement_volumes,
+            daily_demand,
+            daily_fulfilled,
+            daily_on_hand,
+            daily_proc_cost,
+            daily_hold_cost,
+            daily_penalty_cost,
+            daily_spoilage_cost,
+            1.0,
+            procurement_volumes,
         )
+        overall["total_cost_raw"] = raw_total_cost
+        overall["spoilage_rate"] = float(sum(daily_spoilage_units) / max(sum(daily_demand), 1e-9))
 
         return BenchmarkResult(
             policy_name="Baseline 2 (ML + Static)",
@@ -393,3 +437,43 @@ class Benchmarker:
                 f"expected {exp_val:.4f} ± {TOLERANCE}, got {got:.4f}"
             )
         logger.info("benchmarker.paper_results_verified")
+
+    def _soft_validate_results(self, results: dict[str, BenchmarkResult]) -> None:
+        """Log realism checks without failing runs.
+
+        Targets:
+          - 0.01 < stockout_rate < 0.15
+          - 0.85 < fill_rate < 0.99
+          - avg_inventory (AAIRM) <= 2x baseline1
+          - total_cost (AAIRM) < total_cost (baseline1)
+        """
+        if "aairm" not in results:
+            return
+        aa = results["aairm"].overall
+        bl1 = results.get("baseline1")
+
+        sr = float(aa.get("stockout_rate", 0.0))
+        fr = float(aa.get("fill_rate", 0.0))
+        if not (0.01 < sr < 0.15):
+            logger.warning("validation.stockout_outside_target", stockout_rate=sr)
+        if not (0.85 < fr < 0.99):
+            logger.warning("validation.fillrate_outside_target", fill_rate=fr)
+
+        if bl1 is not None:
+            aa_inv = float(aa.get("avg_inventory", 0.0))
+            bl_inv = float(bl1.overall.get("avg_inventory", 0.0))
+            if bl_inv > 0 and aa_inv > 2.0 * bl_inv:
+                logger.warning(
+                    "validation.inventory_too_high",
+                    aairm_avg_inventory=aa_inv,
+                    baseline1_avg_inventory=bl_inv,
+                )
+
+            aa_cost = float(aa.get("total_cost", 0.0))
+            bl_cost = float(bl1.overall.get("total_cost", 1.0))
+            if aa_cost >= bl_cost:
+                logger.warning(
+                    "validation.cost_not_below_baseline",
+                    aairm_total_cost=aa_cost,
+                    baseline1_total_cost=bl_cost,
+                )

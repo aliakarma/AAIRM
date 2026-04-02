@@ -39,8 +39,8 @@ from aairm.utils.seed import set_global_seed
 logger = get_logger(__name__)
 
 try:
-    import gymnasium as gym  # type: ignore
     from gymnasium import spaces  # type: ignore
+
     _GYM_AVAILABLE = True
 except ImportError:
     logger.warning("gymnasium.not_available; RL training disabled")
@@ -99,6 +99,16 @@ class RetailEnv:
         self.action_space: Any = None
         self._gym_available = _GYM_AVAILABLE
 
+        # Reward shaping defaults tuned to avoid degenerate overstock policy.
+        self._holding_cost_rate_daily = 0.02
+        self._stockout_penalty_mult = 4.0
+        self._spoilage_cost_mult = 1.5
+        self._inventory_cap_days = 21.0
+        self._inventory_cap_penalty = 0.5
+        self._shelf_life_scale = 1.0
+        self._expiry_rate_multiplier = 1.0
+        self._base_shelf_life_days: dict[str, int | None] = {}
+
         # Build immediately with default seed
         self._build_components(self._seed)
 
@@ -134,9 +144,7 @@ class RetailEnv:
         info = {"day": 0, "n_skus": len(self._catalog.sku_ids)}  # type: ignore[union-attr]
         return obs, info
 
-    def step(
-        self, action: np.ndarray
-    ) -> tuple[np.ndarray, float, bool, bool, dict[str, Any]]:
+    def step(self, action: np.ndarray) -> tuple[np.ndarray, float, bool, bool, dict[str, Any]]:
         """Advance one day in the RL training loop.
 
         Args:
@@ -150,17 +158,15 @@ class RetailEnv:
             raise RuntimeError("Call reset() before step().")
 
         realised_demand = self._erp.advance_day(self._day)
-        reward = self._compute_reward(realised_demand)
+        day_metrics = self._erp.get_last_day_metrics()
+        snapshot = self._erp.get_inventory_snapshot()
+        reward = self._compute_reward(day_metrics, snapshot)
 
         # Update accumulators
-        snapshot = self._erp.get_inventory_snapshot()
         for sku_id, demand in realised_demand.items():
             self._total_demand[sku_id] = self._total_demand.get(sku_id, 0.0) + demand
-            on_hand = snapshot.get(sku_id, {}).get("on_hand", 0.0)
-            fulfilled = min(demand, on_hand + demand)  # approx
-            self._total_fulfilled[sku_id] = (
-                self._total_fulfilled.get(sku_id, 0.0) + fulfilled
-            )
+            fulfilled = float(snapshot.get(sku_id, {}).get("last_fulfilled", 0.0))
+            self._total_fulfilled[sku_id] = self._total_fulfilled.get(sku_id, 0.0) + fulfilled
         self._daily_on_hand.append(
             {s: snapshot.get(s, {}).get("on_hand", 0.0) for s in self._catalog.sku_ids}  # type: ignore[union-attr]
         )
@@ -176,9 +182,7 @@ class RetailEnv:
         }
         return obs, reward, terminated, truncated, info
 
-    def step_agentic(
-        self, order_dict: dict[str, float]
-    ) -> dict[str, Any]:
+    def step_agentic(self, order_dict: dict[str, Any]) -> dict[str, Any]:
         """Advance one day driven by the full agent pipeline.
 
         Called by the MetaOrchestrator after A1 has placed orders.
@@ -196,19 +200,22 @@ class RetailEnv:
         if self._erp is None:
             raise RuntimeError("Call reset() before step_agentic().")
 
+        self._submit_daily_orders(order_dict)
         realised_demand = self._erp.advance_day(self._day)
-        reward = self._compute_reward(realised_demand)
 
         snapshot = self._erp.get_inventory_snapshot()
+        day_metrics = self._erp.get_last_day_metrics()
+        reward = self._compute_reward(day_metrics, snapshot)
+
         stockout_units = 0.0
+        fulfilled_units = 0.0
         for sku_id, demand in realised_demand.items():
-            on_hand = snapshot.get(sku_id, {}).get("on_hand", 0.0)
-            fulfilled = min(demand, on_hand + demand)
-            stockout_units += max(0.0, demand - fulfilled)
+            fulfilled = float(snapshot.get(sku_id, {}).get("last_fulfilled", 0.0))
+            stockout = max(0.0, demand - fulfilled)
+            stockout_units += stockout
+            fulfilled_units += fulfilled
             self._total_demand[sku_id] = self._total_demand.get(sku_id, 0.0) + demand
-            self._total_fulfilled[sku_id] = (
-                self._total_fulfilled.get(sku_id, 0.0) + fulfilled
-            )
+            self._total_fulfilled[sku_id] = self._total_fulfilled.get(sku_id, 0.0) + fulfilled
 
         self._daily_on_hand.append(
             {s: snapshot.get(s, {}).get("on_hand", 0.0) for s in self._catalog.sku_ids}  # type: ignore[union-attr]
@@ -219,9 +226,45 @@ class RetailEnv:
         return {
             "day": self._day - 1,
             "total_demand": round(total_demand_today, 2),
+            "fulfilled_units": round(fulfilled_units, 2),
             "stockout_units": round(stockout_units, 2),
+            "expired_units": round(float(day_metrics.get("expired_units", 0.0)), 2),
+            "ordering_cost": round(float(day_metrics.get("ordering_cost", 0.0)), 2),
             "reward": round(reward, 4),
         }
+
+    def configure_tuning(
+        self,
+        *,
+        holding_cost_weight: float | None = None,
+        stockout_penalty_weight: float | None = None,
+        spoilage_cost_weight: float | None = None,
+        inventory_cap_penalty: float | None = None,
+        inventory_cap_days: float | None = None,
+        shelf_life_scale: float | None = None,
+        expiry_rate_multiplier: float | None = None,
+    ) -> None:
+        """Apply optional runtime tuning parameters.
+
+        All parameters are optional so existing pipelines remain compatible.
+        """
+        if holding_cost_weight is not None:
+            self._holding_cost_rate_daily = float(max(0.0, holding_cost_weight))
+        if stockout_penalty_weight is not None:
+            self._stockout_penalty_mult = float(max(0.0, stockout_penalty_weight))
+        if spoilage_cost_weight is not None:
+            self._spoilage_cost_mult = float(max(0.0, spoilage_cost_weight))
+        if inventory_cap_penalty is not None:
+            self._inventory_cap_penalty = float(max(0.0, inventory_cap_penalty))
+        if inventory_cap_days is not None:
+            self._inventory_cap_days = float(max(1.0, inventory_cap_days))
+        if shelf_life_scale is not None:
+            self._shelf_life_scale = float(max(0.05, shelf_life_scale))
+            self._apply_perishability_scaling()
+        if expiry_rate_multiplier is not None:
+            self._expiry_rate_multiplier = float(max(0.1, expiry_rate_multiplier))
+            if self._erp is not None:
+                self._erp.set_expiry_rate_multiplier(self._expiry_rate_multiplier)
 
     # ------------------------------------------------------------------
     # ERP delegate methods (for injection into agents)
@@ -350,19 +393,22 @@ class RetailEnv:
             self._gen,
             self._sup,
             self._initial_inv_days,
+            seed=seed,
         )
+        self._base_shelf_life_days = {
+            sku: self._catalog[sku].shelf_life_days for sku in self._catalog.sku_ids
+        }
+        self._apply_perishability_scaling()
+        self._erp.set_expiry_rate_multiplier(self._expiry_rate_multiplier)
         self._total_demand = {s: 0.0 for s in self._catalog.sku_ids}
         self._total_fulfilled = {s: 0.0 for s in self._catalog.sku_ids}
 
         # Gymnasium spaces
         if self._gym_available:
-            n_skus = cfg.n_skus
             self.observation_space = spaces.Box(
                 low=0.0, high=np.inf, shape=(_OBS_DIM,), dtype=np.float32
             )
-            self.action_space = spaces.Box(
-                low=0.0, high=10000.0, shape=(1,), dtype=np.float32
-            )
+            self.action_space = spaces.Box(low=0.0, high=10000.0, shape=(1,), dtype=np.float32)
 
     def _get_obs(self) -> np.ndarray:
         """Build a representative observation vector for the RL policy."""
@@ -384,7 +430,79 @@ class RetailEnv:
                 )
         return np.zeros(_OBS_DIM, dtype=np.float32)
 
-    def _compute_reward(self, realised_demand: dict[str, float]) -> float:
+    def _apply_perishability_scaling(self) -> None:
+        """Scale shelf life for perishables to control spoilage pressure."""
+        if self._catalog is None:
+            return
+        for sku_id in self._catalog.sku_ids:
+            rec = self._catalog[sku_id]
+            base = self._base_shelf_life_days.get(sku_id)
+            if rec.is_perishable and base is not None:
+                rec.shelf_life_days = max(3, int(round(float(base) * self._shelf_life_scale)))
+
+    def _submit_daily_orders(self, order_dict: dict[str, Any]) -> None:
+        """Submit plain {sku: qty} orders for baseline paths.
+
+        AAIRM's A1 already writes POs directly through ERP + supplier backends,
+        but baselines call `step_agentic` with quantity-only orders. This helper
+        creates and confirms those orders through the same backend interfaces.
+        """
+        if not order_dict or self._erp is None:
+            return
+        day = self._day
+        for sku_id, order_payload in order_dict.items():
+            if isinstance(order_payload, dict):
+                qty = float(order_payload.get("quantity", 0.0))
+                supplier_id = order_payload.get("supplier_id")
+                unit_price = float(order_payload.get("unit_price", 0.0))
+                lead_time = int(round(float(order_payload.get("delivery_window_days", 5.0))))
+            else:
+                qty = float(order_payload)
+                supplier_id = None
+                unit_price = 0.0
+                lead_time = 5
+
+            qty_f = float(max(0.0, qty))
+            if qty_f <= 0.0:
+                continue
+            offers = self.query_catalogue(sku_id)
+            if not offers:
+                continue
+            if supplier_id is not None:
+                matched = [o for o in offers if o.get("supplier_id") == supplier_id]
+                chosen = (
+                    matched[0]
+                    if matched
+                    else min(offers, key=lambda x: float(x.get("unit_cost", 1e9)))
+                )
+            else:
+                chosen = min(offers, key=lambda x: float(x.get("unit_cost", 1e9)))
+
+            resolved_unit_price = (
+                unit_price if unit_price > 0.0 else float(chosen.get("unit_cost", 0.0))
+            )
+            resolved_lead_time = (
+                lead_time if lead_time > 0 else int(round(float(chosen.get("lead_time_mean", 5.0))))
+            )
+            po_dict = {
+                "po_id": f"BL-{day:04d}-{sku_id}",
+                "sku_id": sku_id,
+                "supplier_id": chosen.get("supplier_id", "UNKNOWN"),
+                "quantity": qty_f,
+                "unit_price": resolved_unit_price,
+                "delivery_window_days": resolved_lead_time,
+                "day": day,
+            }
+            conf = self.submit_purchase_order(po_dict)
+            eta_days = int(conf.get("eta_days", po_dict["delivery_window_days"]))
+            self.create_purchase_order(po_dict)
+            self.update_inbound_schedule(po_dict["po_id"], eta_days)
+
+    def _compute_reward(
+        self,
+        day_metrics: dict[str, float],
+        snapshot: dict[str, dict[str, Any]],
+    ) -> float:
         """Compute negative expected cost as reward.
 
         Uses a simplified version of Eq. 3: stockout penalty minus
@@ -392,17 +510,37 @@ class RetailEnv:
         """
         if self._erp is None:
             return 0.0
-        snapshot = self._erp.get_inventory_snapshot()
-        reward = 0.0
-        for sku_id, demand in realised_demand.items():
-            rec_sim = self._catalog[sku_id] if self._catalog else None  # type: ignore[index]
-            if rec_sim is None:
-                continue
-            erp_rec = snapshot.get(sku_id, {})
-            on_hand = float(erp_rec.get("on_hand", 0.0))
-            fulfilled = min(demand, on_hand)
-            stockout = max(0.0, demand - fulfilled)
-            penalty = rec_sim.unit_cost * 3.0 * stockout
-            holding = rec_sim.unit_cost * 0.25 / 365.0 * on_hand
-            reward -= (penalty + holding)
-        return float(reward)
+
+        ordering_cost = float(day_metrics.get("ordering_cost", 0.0))
+        stockout_units = float(day_metrics.get("stockout_units", 0.0))
+        expired_units = float(day_metrics.get("expired_units", 0.0))
+        total_demand = float(day_metrics.get("total_demand", 0.0))
+
+        on_hand_cost = 0.0
+        avg_unit_cost = 0.0
+        total_on_hand = 0.0
+        demand_capacity_units = 0.0
+        for rec in snapshot.values():
+            unit_cost = float(rec.get("unit_cost", 5.0))
+            on_hand = float(rec.get("on_hand", 0.0))
+            mu_d = float(rec.get("demand_mean_daily", 0.0))
+            on_hand_cost += on_hand * unit_cost
+            avg_unit_cost += unit_cost
+            total_on_hand += on_hand
+            demand_capacity_units += mu_d * self._inventory_cap_days
+
+        n = max(len(snapshot), 1)
+        avg_unit_cost /= n
+        holding_cost = on_hand_cost * self._holding_cost_rate_daily
+        stockout_penalty = stockout_units * avg_unit_cost * self._stockout_penalty_mult
+        spoilage_cost = expired_units * avg_unit_cost * self._spoilage_cost_mult
+
+        excess_inventory = max(0.0, total_on_hand - demand_capacity_units)
+        cap_penalty = self._inventory_cap_penalty * excess_inventory * avg_unit_cost
+
+        # Normalize all terms so no component numerically dominates reward.
+        demand_value = max(total_demand * avg_unit_cost, 1.0)
+        total_cost = (
+            ordering_cost + holding_cost + stockout_penalty + spoilage_cost + cap_penalty
+        ) / demand_value
+        return -float(total_cost)

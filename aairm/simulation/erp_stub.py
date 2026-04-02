@@ -45,11 +45,14 @@ class ERPStub:
         demand_gen: DemandGenerator,
         supplier_sim: SupplierSimulator,
         initial_inventory_days: float = 14.0,
+        seed: int = 42,
     ) -> None:
         self._catalog = catalog
         self._gen = demand_gen
         self._sup = supplier_sim
         self._day: int = 0
+        self._rng = np.random.default_rng(seed)
+        self._expiry_rate_multiplier: float = 1.0
 
         # In-memory inventory: {sku_id: {on_hand, reserved, in_transit, ...}}
         self._inventory: dict[str, dict[str, Any]] = {}
@@ -57,6 +60,14 @@ class ERPStub:
 
         # Purchase order register: {po_id: dict}
         self._pos: dict[str, dict[str, Any]] = {}
+        self._ordering_cost_by_day: dict[int, float] = {}
+        self._last_day_metrics: dict[str, float] = {
+            "total_demand": 0.0,
+            "fulfilled_units": 0.0,
+            "stockout_units": 0.0,
+            "expired_units": 0.0,
+            "ordering_cost": 0.0,
+        }
 
     # ------------------------------------------------------------------
     # Inventory interface (used by P1)
@@ -102,6 +113,10 @@ class ERPStub:
                 "demand_mean_daily": stats["mu_d"],
                 "demand_std_daily": stats["sigma_d"],
                 "lead_time_days": state.get("avg_lead_time", 5.0),
+                "last_demand": float(state.get("last_demand", 0.0)),
+                "last_fulfilled": float(state.get("last_fulfilled", 0.0)),
+                "last_stockout": float(state.get("last_stockout", 0.0)),
+                "last_expired": float(state.get("last_expired", 0.0)),
             }
         return snapshot
 
@@ -153,6 +168,17 @@ class ERPStub:
                 self._inventory[sku_id].get("in_transit", 0.0) + quantity
             )
 
+        # Track ordering cost for reward shaping and diagnostics.
+        unit_price = float(po_dict.get("unit_price", 0.0))
+        if unit_price <= 0.0:
+            rec = self._catalog.get(sku_id)
+            if rec is not None:
+                unit_price = float(rec.unit_cost)
+        day = int(po_dict.get("day", self._day))
+        self._ordering_cost_by_day[day] = (
+            self._ordering_cost_by_day.get(day, 0.0) + quantity * unit_price
+        )
+
     def update_inbound_schedule(self, po_id: str, eta_days: int) -> None:
         """Record the expected arrival day for a PO.
 
@@ -199,9 +225,7 @@ class ERPStub:
         received = float(receipt.get("received_qty", 0.0))
 
         if sku_id in self._inventory:
-            self._inventory[sku_id]["on_hand"] = (
-                self._inventory[sku_id]["on_hand"] + received
-            )
+            self._inventory[sku_id]["on_hand"] = self._inventory[sku_id]["on_hand"] + received
             # Clear in-transit (may be partial)
             po_id = receipt.get("po_id", "")
             if po_id in self._pos:
@@ -229,17 +253,65 @@ class ERPStub:
             ``{sku_id: realised_demand}`` for metric computation.
         """
         self._day = day
+
+        # Process inbound receipts scheduled for today before demand arrives.
+        for receipt in self._sup.get_pending_receipts(day):
+            self.process_goods_receipt(receipt)
+
         realised: dict[str, float] = {}
+        total_demand = 0.0
+        total_fulfilled = 0.0
+        total_stockout = 0.0
+        total_expired = 0.0
 
         for sku_id in self._catalog.sku_ids:
             demand = self._gen.get_demand(sku_id, day)
             state = self._inventory[sku_id]
             available = max(0.0, state["on_hand"] - state["reserved"])
             fulfilled = min(available, demand)
+            stockout = max(0.0, demand - fulfilled)
             state["on_hand"] = max(0.0, state["on_hand"] - fulfilled)
+
+            # Perishable inventory naturally decays; this creates non-zero spoilage.
+            rec = self._catalog[sku_id]
+            expired = 0.0
+            if rec.is_perishable and rec.shelf_life_days is not None and state["on_hand"] > 0:
+                base_expiry_frac = 1.0 / max(float(rec.shelf_life_days), 1.0)
+                stochastic = float(self._rng.uniform(0.7, 1.3))
+                expired = min(
+                    state["on_hand"],
+                    state["on_hand"] * base_expiry_frac * stochastic * self._expiry_rate_multiplier,
+                )
+                state["on_hand"] = max(0.0, state["on_hand"] - expired)
+
+            state["last_demand"] = float(demand)
+            state["last_fulfilled"] = float(fulfilled)
+            state["last_stockout"] = float(stockout)
+            state["last_expired"] = float(expired)
+
             realised[sku_id] = demand  # store total demand (not fulfilled)
+            total_demand += demand
+            total_fulfilled += fulfilled
+            total_stockout += stockout
+            total_expired += expired
+
+        self._last_day_metrics = {
+            "total_demand": float(total_demand),
+            "fulfilled_units": float(total_fulfilled),
+            "stockout_units": float(total_stockout),
+            "expired_units": float(total_expired),
+            "ordering_cost": float(self._ordering_cost_by_day.pop(day, 0.0)),
+        }
 
         return realised
+
+    def get_last_day_metrics(self) -> dict[str, float]:
+        """Return aggregated metrics from the most recent `advance_day` call."""
+        return dict(self._last_day_metrics)
+
+    def set_expiry_rate_multiplier(self, multiplier: float) -> None:
+        """Set multiplicative factor for perishable expiry dynamics."""
+        self._expiry_rate_multiplier = float(max(0.1, multiplier))
 
     # ------------------------------------------------------------------
     # Supplier catalogue access

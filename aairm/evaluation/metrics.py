@@ -22,10 +22,10 @@ from numpy.typing import ArrayLike
 
 from aairm.utils.math_utils import diversification_index
 
-
 # ---------------------------------------------------------------------------
 # Metric 1 — Stockout Rate
 # ---------------------------------------------------------------------------
+
 
 def stockout_rate(
     demand: ArrayLike,
@@ -68,6 +68,7 @@ def stockout_rate(
 # Metric 2 — Fill Rate
 # ---------------------------------------------------------------------------
 
+
 def fill_rate(
     demand: ArrayLike,
     fulfilled: ArrayLike,
@@ -98,6 +99,7 @@ def fill_rate(
 # ---------------------------------------------------------------------------
 # Metric 3 — Average Inventory Ratio
 # ---------------------------------------------------------------------------
+
 
 def average_inventory_ratio(
     on_hand: ArrayLike,
@@ -139,6 +141,7 @@ def average_inventory_ratio(
 # ---------------------------------------------------------------------------
 # Metric 4 — Total Cost (normalised)
 # ---------------------------------------------------------------------------
+
 
 def total_cost_normalised(
     procurement_costs: ArrayLike,
@@ -189,6 +192,7 @@ def total_cost_normalised(
 # Metric 5 — Supplier Diversification Index
 # ---------------------------------------------------------------------------
 
+
 def supplier_diversification_index(
     procurement_volumes: dict[str, dict[str, float]],
 ) -> float:
@@ -221,7 +225,7 @@ def supplier_diversification_index(
         return 0.0
 
     indices = []
-    for category, vol_by_supplier in procurement_volumes.items():
+    for _category, vol_by_supplier in procurement_volumes.items():
         total = sum(vol_by_supplier.values())
         if total <= 0:
             continue
@@ -234,9 +238,31 @@ def supplier_diversification_index(
     return float(np.mean(indices))
 
 
+def spoilage_rate(
+    demand: ArrayLike,
+    spoilage_units: ArrayLike,
+) -> float:
+    """Fraction of demand-equivalent volume lost due to spoilage.
+
+    Args:
+        demand: Daily demand array.
+        spoilage_units: Daily expired/spoiled units array.
+
+    Returns:
+        Spoilage rate in [0, 1] relative to total demand volume.
+    """
+    d = np.asarray(demand, dtype=float)
+    s = np.asarray(spoilage_units, dtype=float)
+    total_demand = float(d.sum())
+    if total_demand <= 0:
+        return 0.0
+    return float(np.clip(s.sum() / total_demand, 0.0, 1.0))
+
+
 # ---------------------------------------------------------------------------
 # Convenience: compute all metrics at once
 # ---------------------------------------------------------------------------
+
 
 def compute_all_metrics(
     demand: ArrayLike,
@@ -264,15 +290,19 @@ def compute_all_metrics(
 
     Returns:
         Dict with keys:
-        ``{stockout_rate, fill_rate, avg_inventory, total_cost, div_index}``.
+        ``{stockout_rate, fill_rate, avg_inventory, total_cost, div_index, spoilage_rate}``.
     """
     return {
         "stockout_rate": stockout_rate(demand, fulfilled),
         "fill_rate": fill_rate(demand, fulfilled),
         "avg_inventory": average_inventory_ratio(on_hand, demand),
         "total_cost": total_cost_normalised(
-            procurement_costs, holding_costs,
-            penalty_costs, spoilage_costs, baseline_total_cost,
+            procurement_costs,
+            holding_costs,
+            penalty_costs,
+            spoilage_costs,
+            baseline_total_cost,
         ),
         "div_index": supplier_diversification_index(procurement_volumes),
+        "spoilage_rate": spoilage_rate(demand, spoilage_costs),
     }

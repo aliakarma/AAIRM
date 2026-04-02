@@ -19,11 +19,10 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Any
 
 import numpy as np
 
-from aairm.evaluation.benchmarker import BenchmarkResult, PAPER_RESULTS
+from aairm.evaluation.benchmarker import PAPER_RESULTS, BenchmarkResult
 from aairm.utils.logging import get_logger
 
 logger = get_logger(__name__)
@@ -32,14 +31,14 @@ logger = get_logger(__name__)
 # House style — matches paper LaTeX colour definitions
 # ---------------------------------------------------------------------------
 PALETTE = {
-    "baseline1": "#2c5f8a",   # NavyBlue
-    "baseline2": "#c9a227",   # Goldenrod
-    "aairm":     "#5a7c3b",   # OliveGreen
+    "baseline1": "#2c5f8a",  # NavyBlue
+    "baseline2": "#c9a227",  # Goldenrod
+    "aairm": "#5a7c3b",  # OliveGreen
 }
 POLICY_LABELS = {
     "baseline1": "Baseline 1 (ROP–EOQ)",
     "baseline2": "Baseline 2 (ML + Static)",
-    "aairm":     "AAIRM (proposed)",
+    "aairm": "AAIRM (proposed)",
 }
 
 
@@ -47,15 +46,16 @@ def _apply_house_style() -> None:
     """Apply AAIRM matplotlib house style."""
     try:
         import matplotlib as mpl
+
         mpl.rcParams.update(
             {
-                "font.family":       "serif",
-                "font.size":         11,
-                "axes.titlesize":    13,
-                "axes.labelsize":    11,
-                "legend.fontsize":   9,
-                "figure.dpi":        150,
-                "axes.spines.top":   False,
+                "font.family": "serif",
+                "font.size": 11,
+                "axes.titlesize": 13,
+                "axes.labelsize": 11,
+                "legend.fontsize": 9,
+                "figure.dpi": 150,
+                "axes.spines.top": False,
                 "axes.spines.right": False,
             }
         )
@@ -126,7 +126,7 @@ class Reporter:
         """Print overall results table to stdout."""
         header = (
             f"{'Policy':<30} {'Stockout%':>10} {'FillRate%':>10} "
-            f"{'AvgInv':>8} {'TotalCost':>10} {'DivIdx':>8}"
+            f"{'AvgInv':>8} {'TotalCost':>10} {'DivIdx':>8} {'Spoil%':>8}"
         )
         sep = "-" * len(header)
         print("\n" + sep)
@@ -148,7 +148,8 @@ class Reporter:
                 f"{m.get('fill_rate', 0)*100:>9.1f}% "
                 f"{m.get('avg_inventory', 0):>8.2f} "
                 f"{m.get('total_cost', 0):>10.2f} "
-                f"{m.get('div_index', 0):>8.2f}"
+                f"{m.get('div_index', 0):>8.2f} "
+                f"{m.get('spoilage_rate', 0)*100:>7.2f}"
             )
         print(sep + "\n")
 
@@ -177,12 +178,15 @@ class Reporter:
                 continue
             m = res.overall
             label = POLICY_LABELS.get(key, key)
-            def fmt(v: float, pct: bool = False) -> str:
+
+            def fmt(v: float, pct: bool = False, bold: bool = bold) -> str:
                 s = f"{v*100:.1f}" if pct else f"{v:.2f}"
                 return r"\textbf{" + s + r"}" if bold else s
 
+            policy_cell = r"\textbf{" + label + r"}" if bold else label
+
             row = (
-                f"{'\\textbf{' + label + '}' if bold else label} & "
+                f"{policy_cell} & "
                 f"{fmt(m.get('stockout_rate', 0), pct=True)} & "
                 f"{fmt(m.get('fill_rate', 0), pct=True)} & "
                 f"{fmt(m.get('avg_inventory', 0))} & "
@@ -206,18 +210,18 @@ class Reporter:
         # Per-category expected values (paper Table 3)
         EXPECTED: dict[str, dict[str, dict[str, float]]] = {
             "baseline1": {
-                "grocery":     {"stockout_rate": 0.074, "fill_rate": 0.938, "spoilage_rate": None},
+                "grocery": {"stockout_rate": 0.074, "fill_rate": 0.938, "spoilage_rate": None},
                 "frozen_food": {"stockout_rate": 0.118, "fill_rate": 0.902, "spoilage_rate": 0.063},
-                "apparel":     {"stockout_rate": 0.065, "fill_rate": 0.944, "spoilage_rate": None},
-                "cosmetics":   {"stockout_rate": 0.091, "fill_rate": 0.921, "spoilage_rate": 0.037},
-                "dry_fruits":  {"stockout_rate": 0.087, "fill_rate": 0.931, "spoilage_rate": 0.041},
+                "apparel": {"stockout_rate": 0.065, "fill_rate": 0.944, "spoilage_rate": None},
+                "cosmetics": {"stockout_rate": 0.091, "fill_rate": 0.921, "spoilage_rate": 0.037},
+                "dry_fruits": {"stockout_rate": 0.087, "fill_rate": 0.931, "spoilage_rate": 0.041},
             },
             "aairm": {
-                "grocery":     {"stockout_rate": 0.032, "fill_rate": 0.981, "spoilage_rate": None},
+                "grocery": {"stockout_rate": 0.032, "fill_rate": 0.981, "spoilage_rate": None},
                 "frozen_food": {"stockout_rate": 0.049, "fill_rate": 0.969, "spoilage_rate": 0.028},
-                "apparel":     {"stockout_rate": 0.028, "fill_rate": 0.987, "spoilage_rate": None},
-                "cosmetics":   {"stockout_rate": 0.043, "fill_rate": 0.974, "spoilage_rate": 0.016},
-                "dry_fruits":  {"stockout_rate": 0.043, "fill_rate": 0.979, "spoilage_rate": 0.020},
+                "apparel": {"stockout_rate": 0.028, "fill_rate": 0.987, "spoilage_rate": None},
+                "cosmetics": {"stockout_rate": 0.043, "fill_rate": 0.974, "spoilage_rate": 0.016},
+                "dry_fruits": {"stockout_rate": 0.043, "fill_rate": 0.979, "spoilage_rate": 0.020},
             },
         }
 
@@ -244,9 +248,13 @@ class Reporter:
 
         for cat in categories:
             bl1 = EXPECTED["baseline1"].get(cat, {})
-            aa  = EXPECTED["aairm"].get(cat, {})
-            spo_bl = "\\textemdash" if cat not in perishable else f"{bl1.get('spoilage_rate',0)*100:.1f}"
-            spo_aa = "\\textemdash" if cat not in perishable else f"{aa.get('spoilage_rate',0)*100:.1f}"
+            aa = EXPECTED["aairm"].get(cat, {})
+            spo_bl = (
+                "\\textemdash" if cat not in perishable else f"{bl1.get('spoilage_rate',0)*100:.1f}"
+            )
+            spo_aa = (
+                "\\textemdash" if cat not in perishable else f"{aa.get('spoilage_rate',0)*100:.1f}"
+            )
             row = (
                 f"{cat.replace('_', ' ').title()} & "
                 f"{bl1.get('stockout_rate',0)*100:.1f} & "
@@ -277,7 +285,7 @@ class Reporter:
     def plot_figure3(self) -> None:
         """Reproduce Figure 3: normalised bar chart of stockout, cost, avg_inv."""
         import matplotlib.pyplot as plt
-        import matplotlib.patches as mpatches
+
         _apply_house_style()
 
         metrics = ["stockout_rate", "total_cost", "avg_inventory"]
@@ -286,9 +294,11 @@ class Reporter:
 
         # Normalise to baseline1 values
         bl1_vals = {
-            m: self._results["baseline1"].overall.get(m, 1.0)
-            if "baseline1" in self._results
-            else PAPER_RESULTS["baseline1"].get(m, 1.0)
+            m: (
+                self._results["baseline1"].overall.get(m, 1.0)
+                if "baseline1" in self._results
+                else PAPER_RESULTS["baseline1"].get(m, 1.0)
+            )
             for m in metrics
         }
 
@@ -304,7 +314,7 @@ class Reporter:
             else:
                 vals = [res.overall.get(m, 0.0) for m in metrics]
 
-            normalised = [v / max(bl1_vals[m], 1e-9) for v, m in zip(vals, metrics)]
+            normalised = [v / max(bl1_vals[m], 1e-9) for v, m in zip(vals, metrics, strict=False)]
             bars = ax.bar(
                 x + (i - 1) * width,
                 normalised,
@@ -314,12 +324,14 @@ class Reporter:
                 edgecolor="white",
                 linewidth=0.5,
             )
-            for bar, val in zip(bars, normalised):
+            for bar, val in zip(bars, normalised, strict=False):
                 ax.text(
                     bar.get_x() + bar.get_width() / 2,
                     bar.get_height() + 0.01,
                     f"{val:.2f}",
-                    ha="center", va="bottom", fontsize=8,
+                    ha="center",
+                    va="bottom",
+                    fontsize=8,
                 )
 
         ax.set_xticks(x)
@@ -343,32 +355,73 @@ class Reporter:
     def plot_figure4(self) -> None:
         """Reproduce Figure 4: RL training curve for C2."""
         import matplotlib.pyplot as plt
+
         _apply_house_style()
+
+        def moving_average(values: list[float], window: int = 20) -> np.ndarray:
+            arr = np.asarray(values, dtype=float)
+            if len(arr) < 2:
+                return arr
+            if window <= 1:
+                return arr
+            kernel = np.ones(window) / float(window)
+            return np.convolve(arr, kernel, mode="same")
 
         # Use actual RL curve if available, else reproduce paper curve
         aairm_res = self._results.get("aairm")
-        if aairm_res and aairm_res.rl_curve:
+        if aairm_res and aairm_res.timeseries.get("reward_raw_by_seed") is not None:
+            rewards_by_seed = np.asarray(aairm_res.timeseries["reward_raw_by_seed"], dtype=float)
+            episodes = list(range(rewards_by_seed.shape[1]))
+            raw_mean = rewards_by_seed.mean(axis=0)
+            raw_std = rewards_by_seed.std(axis=0)
+            smooth_mean = moving_average(raw_mean.tolist(), window=20)
+        elif aairm_res and aairm_res.rl_curve:
             episodes = [ep for ep, _ in aairm_res.rl_curve]
-            costs = [c for _, c in aairm_res.rl_curve]
+            raw_mean = np.asarray([c for _, c in aairm_res.rl_curve], dtype=float)
+            raw_std = np.zeros_like(raw_mean)
+            smooth_mean = moving_average(raw_mean.tolist(), window=20)
         else:
             # Paper-reported convergence curve (Table 4 / Figure 4 data)
             episodes = [0, 25, 50, 75, 100, 150, 200, 250, 300, 350, 400]
-            costs =    [1.00, 0.98, 0.95, 0.93, 0.91, 0.88, 0.86, 0.84, 0.83, 0.83, 0.82]
+            raw_mean = np.asarray(
+                [1.00, 0.98, 0.95, 0.93, 0.91, 0.88, 0.86, 0.84, 0.83, 0.83, 0.82],
+                dtype=float,
+            )
+            raw_std = np.zeros_like(raw_mean)
+            smooth_mean = moving_average(raw_mean.tolist(), window=3)
 
         fig, ax = plt.subplots(figsize=(7, 4.5))
-        ax.plot(episodes, costs, color=PALETTE["aairm"], linewidth=1.8,
-                label="C2 PPO Policy")
-        ax.axhline(y=0.82, color="gray", linestyle="--", linewidth=0.9)
-        ax.text(episodes[-1] + 5, 0.82, r"$\approx 0.82$", fontsize=9,
-                va="center", color="gray")
+        ax.plot(
+            episodes,
+            raw_mean,
+            color=PALETTE["aairm"],
+            linewidth=1.0,
+            alpha=0.35,
+            label="Raw reward",
+        )
+        ax.plot(
+            episodes,
+            smooth_mean,
+            color=PALETTE["aairm"],
+            linewidth=2.0,
+            label="Moving average (window=20)",
+        )
+        if np.any(raw_std > 0):
+            ax.fill_between(
+                episodes,
+                raw_mean - raw_std,
+                raw_mean + raw_std,
+                color=PALETTE["aairm"],
+                alpha=0.15,
+                label="±1 std (across seeds)",
+            )
 
         ax.set_xlabel("Training episode")
-        ax.set_ylabel("Average episode cost (normalised)")
+        ax.set_ylabel("Episode reward")
         ax.set_xlim(0, max(episodes) + 20)
-        ax.set_ylim(0.78, 1.05)
         ax.grid(linewidth=0.3, color="gray", alpha=0.4)
         ax.legend()
-        ax.set_title("Figure 4: Reorder Optimisation Agent (C2) Training Curve")
+        ax.set_title("Figure 4: C2 Training Curve (Raw + Smoothed)")
 
         path = self._out / "figure4_rl_curve.png"
         fig.tight_layout()
