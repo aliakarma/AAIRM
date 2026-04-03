@@ -100,11 +100,17 @@ class RetailEnv:
         self._gym_available = _GYM_AVAILABLE
 
         # Reward shaping defaults tuned to avoid degenerate overstock policy.
-        self._holding_cost_rate_daily = 0.02
-        self._stockout_penalty_mult = 4.0
+        self._holding_cost_rate_daily = 1.0
+        self._stockout_penalty_mult = 1.2
         self._spoilage_cost_mult = 1.5
         self._inventory_cap_days = 21.0
         self._inventory_cap_penalty = 0.5
+        self._stockout_collapse_threshold = 0.25
+        self._stockout_collapse_penalty = 10000.0
+        self._fill_rate_guard_threshold = 0.80
+        self._fill_rate_guard_penalty = 500.0
+        self._inventory_floor_threshold = 3.0
+        self._inventory_floor_penalty = 300.0
         self._shelf_life_scale = 1.0
         self._expiry_rate_multiplier = 1.0
         self._base_shelf_life_days: dict[str, int | None] = {}
@@ -160,7 +166,7 @@ class RetailEnv:
         realised_demand = self._erp.advance_day(self._day)
         day_metrics = self._erp.get_last_day_metrics()
         snapshot = self._erp.get_inventory_snapshot()
-        reward = self._compute_reward(day_metrics, snapshot)
+        reward, collapse = self._compute_reward(day_metrics, snapshot, realised_demand)
 
         # Update accumulators
         for sku_id, demand in realised_demand.items():
@@ -172,13 +178,14 @@ class RetailEnv:
         )
 
         self._day += 1
-        terminated = self._day >= self._n_days
+        terminated = self._day >= self._n_days or collapse
         truncated = False
 
         obs = self._get_obs()
         info = {
             "day": self._day,
             "reward": reward,
+            "collapse": collapse,
         }
         return obs, reward, terminated, truncated, info
 
@@ -205,7 +212,7 @@ class RetailEnv:
 
         snapshot = self._erp.get_inventory_snapshot()
         day_metrics = self._erp.get_last_day_metrics()
-        reward = self._compute_reward(day_metrics, snapshot)
+        reward, collapse = self._compute_reward(day_metrics, snapshot, realised_demand)
 
         stockout_units = 0.0
         fulfilled_units = 0.0
@@ -231,6 +238,7 @@ class RetailEnv:
             "expired_units": round(float(day_metrics.get("expired_units", 0.0)), 2),
             "ordering_cost": round(float(day_metrics.get("ordering_cost", 0.0)), 2),
             "reward": round(reward, 4),
+            "collapse": bool(collapse),
         }
 
     def configure_tuning(
@@ -363,6 +371,18 @@ class RetailEnv:
             "total_fulfilled": round(tot_f, 2),
             "stockout_rate": round(float(stockout_rate), 6),
             "fill_rate": round(float(fill_rate), 6),
+        }
+
+    def get_tuning_parameters(self) -> dict[str, float]:
+        """Return currently active reward/environment tuning parameters."""
+        return {
+            "holding_cost_weight": float(self._holding_cost_rate_daily),
+            "stockout_penalty_weight": float(self._stockout_penalty_mult),
+            "spoilage_cost_weight": float(self._spoilage_cost_mult),
+            "inventory_cap_penalty": float(self._inventory_cap_penalty),
+            "inventory_cap_days": float(self._inventory_cap_days),
+            "shelf_life_scale": float(self._shelf_life_scale),
+            "expiry_rate_multiplier": float(self._expiry_rate_multiplier),
         }
 
     # ------------------------------------------------------------------
@@ -502,14 +522,19 @@ class RetailEnv:
         self,
         day_metrics: dict[str, float],
         snapshot: dict[str, dict[str, Any]],
-    ) -> float:
+        realised_demand: dict[str, float] | None = None,
+    ) -> tuple[float, bool]:
         """Compute negative expected cost as reward.
 
         Uses a simplified version of Eq. 3: stockout penalty minus
         holding cost, so the RL agent learns to balance both.
+
+        Includes per-SKU constraints to prevent individual SKU collapse:
+        - Per-SKU high stockout ratio penalty (> 30% -> -50)
+        - Per-SKU low inventory ratio penalty (< 10% -> -50)
         """
         if self._erp is None:
-            return 0.0
+            return 0.0, False
 
         ordering_cost = float(day_metrics.get("ordering_cost", 0.0))
         stockout_units = float(day_metrics.get("stockout_units", 0.0))
@@ -532,15 +557,43 @@ class RetailEnv:
         n = max(len(snapshot), 1)
         avg_unit_cost /= n
         holding_cost = on_hand_cost * self._holding_cost_rate_daily
-        stockout_penalty = stockout_units * avg_unit_cost * self._stockout_penalty_mult
         spoilage_cost = expired_units * avg_unit_cost * self._spoilage_cost_mult
 
         excess_inventory = max(0.0, total_on_hand - demand_capacity_units)
         cap_penalty = self._inventory_cap_penalty * excess_inventory * avg_unit_cost
 
-        # Normalize all terms so no component numerically dominates reward.
-        demand_value = max(total_demand * avg_unit_cost, 1.0)
-        total_cost = (
-            ordering_cost + holding_cost + stockout_penalty + spoilage_cost + cap_penalty
-        ) / demand_value
-        return -float(total_cost)
+        reward = -(ordering_cost + holding_cost + spoilage_cost + cap_penalty)
+
+        stockout_rate = stockout_units / (total_demand + 1e-6)
+        reward -= self._stockout_penalty_mult * stockout_rate * total_demand
+
+        # Per-SKU constraints: prevent individual SKU collapse
+        if realised_demand is not None:
+            for sku_id, sku_demand in realised_demand.items():
+                sku_fulfilled = float(snapshot.get(sku_id, {}).get("last_fulfilled", 0.0))
+                sku_stockout = max(0.0, sku_demand - sku_fulfilled)
+                sku_stockout_ratio = sku_stockout / (sku_demand + 1e-6)
+
+                if sku_stockout_ratio > 0.30:
+                    reward -= 50.0
+
+                sku_inventory = float(snapshot.get(sku_id, {}).get("on_hand", 0.0))
+                sku_inventory_ratio = sku_inventory / (sku_demand + 1e-6)
+
+                if sku_inventory_ratio < 0.10:
+                    reward -= 50.0
+
+        collapse = stockout_rate > self._stockout_collapse_threshold
+        if collapse:
+            reward -= self._stockout_collapse_penalty
+
+        fill_rate = 1.0 - stockout_rate
+        if fill_rate < self._fill_rate_guard_threshold:
+            reward -= self._fill_rate_guard_penalty
+
+        inventory_level = total_on_hand
+        inventory_ratio = inventory_level / (total_demand + 1e-6)
+        if inventory_ratio < 0.1:
+            reward -= 1000.0
+
+        return float(reward), collapse

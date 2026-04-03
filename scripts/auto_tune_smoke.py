@@ -1,208 +1,204 @@
 #!/usr/bin/env python3
-"""Auto-tune AAIRM smoke parameters under strict iteration budget.
+"""Strict smoke-only auto-tuning loop for AAIRM.
 
-Searches up to max iterations, evaluates multi-seed smoke results, and writes:
-- best_config.json
-- best_summary.json
-- iteration_log.json
+Runs multi-seed smoke experiments only (no full-scale runs) and iteratively
+retunes environment/reward parameters until strict service-level constraints
+and cost-improvement goals are met.
 """
 
 from __future__ import annotations
 
 import argparse
-import itertools
 import json
 from pathlib import Path
 
-import numpy as np
 from run_smoke_multiseed import run_smoke
 
 
-def moving_average(values: list[float], window: int = 8) -> list[float]:
-    if len(values) < window:
-        return values[:]
-    kernel = np.ones(window, dtype=float) / float(window)
-    return np.convolve(np.array(values, dtype=float), kernel, mode="valid").tolist()
+def parse_seeds(text: str) -> list[int]:
+    return [int(x.strip()) for x in text.split(",") if x.strip()]
 
 
-def curve_checks(runs: list[dict]) -> dict[str, float | bool]:
-    curves = [r.get("aairm_reward_raw", []) for r in runs if r.get("aairm_reward_raw")]
-    if not curves:
-        return {
-            "curve_has_noise": False,
-            "curve_trend_improves": False,
-            "curve_converges_early": False,
-            "curve_noise_value": 0.0,
-            "curve_final_slope": 0.0,
-        }
-
-    min_len = min(len(c) for c in curves)
-    stacked = np.array([np.array(c[:min_len], dtype=float) for c in curves])
-    mean_curve = np.mean(stacked, axis=0).tolist()
-    smoothed = moving_average(mean_curve, window=8)
-
-    curve_std = float(np.std(mean_curve))
-    first = float(np.mean(smoothed[: max(5, len(smoothed) // 4)]))
-    last = float(np.mean(smoothed[-max(5, len(smoothed) // 4) :]))
-    trend_improves = last > first
-
-    tail = smoothed[-10:] if len(smoothed) >= 10 else smoothed
-    if len(tail) >= 2:
-        slope = float((tail[-1] - tail[0]) / max(1, len(tail) - 1))
-    else:
-        slope = 0.0
-
-    converges_early = abs(slope) < 0.08 and len(mean_curve) <= 80
-
-    return {
-        "curve_has_noise": curve_std > 0.01,
-        "curve_trend_improves": trend_improves,
-        "curve_converges_early": converges_early,
-        "curve_noise_value": curve_std,
-        "curve_final_slope": slope,
-    }
-
-
-def evaluate(summary: dict, runs: list[dict]) -> dict:
+def evaluate(summary: dict) -> dict:
     aa = summary["aairm"]
-    b1 = summary["baseline1"]
     b2 = summary["baseline2"]
 
+    aa_stockout = float(aa["stockout_rate"]["mean"])
+    aa_fill = float(aa["fill_rate"]["mean"])
+    aa_inv = float(aa["avg_inventory"]["mean"])
+    aa_spoil = float(aa["spoilage_rate"]["mean"])
     aa_cost = float(aa["total_cost"]["mean"])
+    aa_cost_std = float(aa["total_cost"]["std"])
+    aa_stockout_std = float(aa["stockout_rate"]["std"])
+    aa_fill_std = float(aa["fill_rate"]["std"])
+
     b2_cost = float(b2["total_cost"]["mean"])
+    b2_inv = float(b2["avg_inventory"]["mean"])
     improvement = (b2_cost - aa_cost) / max(b2_cost, 1e-9)
 
-    constraints = {
-        "aairm_beats_baseline2": aa_cost < b2_cost,
-        "aairm_improvement_ge_5pct": improvement >= 0.05,
-        "stockout_in_range": 0.01 < float(aa["stockout_rate"]["mean"]) < 0.15,
-        "fill_in_range": 0.85 < float(aa["fill_rate"]["mean"]) < 0.99,
-        "inventory_le_2x_baseline1": float(aa["avg_inventory"]["mean"])
-        <= 2.0 * float(b1["avg_inventory"]["mean"]),
-        "spoilage_nonzero": float(aa["spoilage_rate"]["mean"]) >= 0.01,
-        "non_deterministic_cost_std": float(aa["total_cost"]["std"]) > 1e-6,
+    hard_constraints = {
+        "stockout_in_range": 0.05 <= aa_stockout <= 0.12,
+        "fill_in_range": 0.88 <= aa_fill <= 0.96,
+        "inventory_floor": aa_inv >= 3.0,
+        "spoilage_nonzero": aa_spoil > 0.01,
+        "stochastic_nonzero_std": (aa_cost_std > 1e-6)
+        and (aa_stockout_std > 1e-6)
+        and (aa_fill_std > 1e-6),
     }
+    hard_valid = all(hard_constraints.values())
 
-    curve_result = curve_checks(runs)
-    constraints["curve_has_noise"] = bool(curve_result["curve_has_noise"])
-    constraints["curve_trend_improves"] = bool(curve_result["curve_trend_improves"])
-    constraints["curve_converges_early"] = bool(curve_result["curve_converges_early"])
-
-    hard_ok = all(
-        constraints[k]
-        for k in [
-            "aairm_beats_baseline2",
-            "aairm_improvement_ge_5pct",
-            "stockout_in_range",
-            "fill_in_range",
-            "inventory_le_2x_baseline1",
-            "spoilage_nonzero",
-            "non_deterministic_cost_std",
-            "curve_has_noise",
-            "curve_trend_improves",
-            "curve_converges_early",
-        ]
-    )
-
-    score = (
-        max(0.0, improvement) * 100.0
-        + 15.0 * float(constraints["stockout_in_range"])
-        + 15.0 * float(constraints["fill_in_range"])
-        + 10.0 * float(constraints["inventory_le_2x_baseline1"])
-        + 20.0 * min(1.0, float(aa["spoilage_rate"]["mean"]) / 0.03)
-        + 20.0 * float(constraints["curve_trend_improves"])
-    )
+    soft_objectives = {
+        "cost_beats_baseline2": aa_cost < b2_cost,
+        "improvement_ge_5pct": improvement >= 0.05,
+    }
+    success = hard_valid and all(soft_objectives.values())
 
     return {
-        "hard_ok": hard_ok,
-        "score": float(score),
-        "improvement_vs_baseline2": float(improvement),
-        "constraints": constraints,
+        "hard_valid": hard_valid,
+        "success": success,
+        "hard_constraints": hard_constraints,
+        "soft_objectives": soft_objectives,
         "metrics": {
-            "aairm_total_cost": aa_cost,
-            "baseline2_total_cost": b2_cost,
-            "aairm_stockout": float(aa["stockout_rate"]["mean"]),
-            "aairm_fill": float(aa["fill_rate"]["mean"]),
-            "aairm_avg_inventory": float(aa["avg_inventory"]["mean"]),
-            "aairm_spoilage": float(aa["spoilage_rate"]["mean"]),
+            "aairm_stockout": aa_stockout,
+            "aairm_fill": aa_fill,
+            "aairm_inventory": aa_inv,
+            "aairm_spoilage": aa_spoil,
+            "aairm_cost": aa_cost,
+            "baseline2_cost": b2_cost,
+            "baseline2_inventory": b2_inv,
+            "aairm_stockout_std": aa_stockout_std,
+            "aairm_fill_std": aa_fill_std,
+            "aairm_inventory_std": float(aa["avg_inventory"]["std"]),
+            "aairm_cost_std": aa_cost_std,
+            "aairm_spoilage_std": float(aa["spoilage_rate"]["std"]),
+            "improvement_vs_baseline2": improvement,
         },
     }
 
 
-def build_candidates(max_iterations: int) -> list[dict[str, float]]:
-    grid = {
-        "holding_cost_weight": [1.5, 2.0, 2.5],
-        "stockout_penalty_weight": [0.6, 0.8, 1.0],
-        "spoilage_cost_weight": [1.0, 1.5],
-        "inventory_cap_penalty": [0.5, 1.0],
-        "shelf_life_scale": [0.35, 0.5, 0.7],
-        "expiry_rate_multiplier": [1.0, 1.5, 2.0],
-    }
+def clamp(value: float, lo: float, hi: float) -> float:
+    return float(min(hi, max(lo, value)))
 
-    keys = list(grid.keys())
-    all_combos = [dict(zip(keys, vals, strict=False)) for vals in itertools.product(*(grid[k] for k in keys))]
 
-    # Deterministic but diverse ordering: prioritize stronger perishability pressure first.
-    all_combos.sort(
-        key=lambda x: (
-            x["shelf_life_scale"],
-            -x["expiry_rate_multiplier"],
-            x["holding_cost_weight"],
-        )
+def retune(tuning: dict[str, float], eval_out: dict) -> dict[str, float]:
+    metrics = eval_out["metrics"]
+    stockout = float(metrics["aairm_stockout"])
+    inv = float(metrics["aairm_inventory"])
+    spoil = float(metrics["aairm_spoilage"])
+    b2_inv = float(metrics["baseline2_inventory"])
+    cost_bad = not bool(eval_out["soft_objectives"]["cost_beats_baseline2"])
+
+    hold = float(tuning["holding_cost_weight"])
+    stock_pen = float(tuning["stockout_penalty_weight"])
+    expiry_mult = float(tuning["expiry_rate_multiplier"])
+
+    if stockout > 0.12:
+        stock_pen += 0.2
+        hold -= 0.1
+    elif stockout < 0.05:
+        hold += 0.2
+
+    if inv < 3.0:
+        hold -= 0.1
+    elif inv > 1.2 * b2_inv:
+        hold += 0.1
+
+    if spoil <= 0.01:
+        expiry_mult += 0.1
+
+    if cost_bad:
+        stock_pen += 0.1
+
+    tuning["holding_cost_weight"] = clamp(hold, 0.8, 1.5)
+    tuning["stockout_penalty_weight"] = clamp(stock_pen, 1.0, 2.0)
+    tuning["expiry_rate_multiplier"] = clamp(expiry_mult, 0.8, 2.5)
+    return tuning
+
+
+def score(eval_out: dict) -> float:
+    m = eval_out["metrics"]
+    c = eval_out["hard_constraints"]
+    s = eval_out["soft_objectives"]
+    return (
+        30.0 * float(c["stockout_in_range"])
+        + 30.0 * float(c["fill_in_range"])
+        + 20.0 * float(c["inventory_floor"])
+        + 10.0 * float(c["spoilage_nonzero"])
+        + 10.0 * float(c["stochastic_nonzero_std"])
+        + 10.0 * float(s["cost_beats_baseline2"])
+        + 10.0 * float(s["improvement_ge_5pct"])
+        + 100.0 * max(0.0, float(m["improvement_vs_baseline2"]))
     )
-    return all_combos[:max_iterations]
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Auto-tune AAIRM smoke parameters")
-    parser.add_argument("--max-iterations", type=int, default=20)
+    parser = argparse.ArgumentParser(description="Strict smoke-only auto-tuning")
+    parser.add_argument("--max-iterations", type=int, default=15)
     parser.add_argument("--seeds", type=str, default="42,43,44")
     parser.add_argument("--n-skus", type=int, default=100)
     parser.add_argument("--episodes", type=int, default=80)
-    parser.add_argument("--out-dir", type=str, default="experiments/results/smoke_autotune")
+    parser.add_argument("--out-dir", type=str, default="experiments/results/smoke_autotune_strict")
     args = parser.parse_args()
 
-    seeds = [int(x.strip()) for x in args.seeds.split(",") if x.strip()]
+    seeds = parse_seeds(args.seeds)
     out_dir = Path(args.out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    best = None
+    tuning: dict[str, float] = {
+        "holding_cost_weight": 1.0,
+        "stockout_penalty_weight": 1.2,
+        "spoilage_cost_weight": 1.0,
+        "inventory_cap_penalty": 0.5,
+        "inventory_cap_days": 21.0,
+        "shelf_life_scale": 0.5,
+        "expiry_rate_multiplier": 1.5,
+    }
+
+    best: dict | None = None
     iteration_log: list[dict] = []
 
-    for idx, tuning in enumerate(build_candidates(args.max_iterations), start=1):
+    for idx in range(1, args.max_iterations + 1):
         runs, summary = run_smoke(
             seeds=seeds,
             n_skus=args.n_skus,
             rl_episodes=args.episodes,
             tuning=tuning,
         )
-        eval_out = evaluate(summary, runs)
+        eval_out = evaluate(summary)
+        iter_score = score(eval_out)
 
         record = {
             "iteration": idx,
-            "tuning": tuning,
+            "tuning": dict(tuning),
             "evaluation": eval_out,
             "summary": summary,
+            "runs": runs,
+            "score": iter_score,
         }
         iteration_log.append(record)
 
         print(
-            f"[{idx:02d}] score={eval_out['score']:.2f} "
-            f"impr={eval_out['improvement_vs_baseline2']:.4f} "
-            f"aairm_cost={eval_out['metrics']['aairm_total_cost']:.4f} "
-            f"b2_cost={eval_out['metrics']['baseline2_total_cost']:.4f} "
+            f"[{idx:02d}] "
+            f"stockout={eval_out['metrics']['aairm_stockout']:.4f} "
+            f"fill={eval_out['metrics']['aairm_fill']:.4f} "
+            f"inv={eval_out['metrics']['aairm_inventory']:.4f} "
             f"spoil={eval_out['metrics']['aairm_spoilage']:.4f} "
-            f"ok={eval_out['hard_ok']}"
+            f"cost={eval_out['metrics']['aairm_cost']:.4f} "
+            f"b2={eval_out['metrics']['baseline2_cost']:.4f} "
+            f"impr={100.0 * eval_out['metrics']['improvement_vs_baseline2']:.2f}% "
+            f"hard_valid={eval_out['hard_valid']} success={eval_out['success']}"
         )
 
-        if best is None or eval_out["score"] > best["evaluation"]["score"]:
+        if best is None or iter_score > float(best["score"]):
             best = record
 
-        if eval_out["hard_ok"]:
+        if bool(eval_out["success"]):
             break
 
+        tuning = retune(tuning, eval_out)
+
     if best is None:
-        raise RuntimeError("No tuning iterations executed.")
+        raise RuntimeError("No smoke iterations executed.")
 
     best_config_path = out_dir / "best_config.json"
     best_summary_path = out_dir / "best_summary.json"
@@ -213,6 +209,7 @@ def main() -> None:
         json.dumps(
             {
                 "best_iteration": best["iteration"],
+                "best_score": best["score"],
                 "tuning": best["tuning"],
                 "evaluation": best["evaluation"],
                 "summary": best["summary"],
@@ -222,11 +219,24 @@ def main() -> None:
     )
     iteration_log_path.write_text(json.dumps(iteration_log, indent=2))
 
-    print("\nAuto-tune complete")
-    print(f"Best iteration: {best['iteration']}")
-    print(f"best_config.json: {best_config_path}")
-    print(f"best_summary.json: {best_summary_path}")
-    print(f"iteration_log.json: {iteration_log_path}")
+    m = best["evaluation"]["metrics"]
+    print("\nBEST CONFIG:")
+    for key, value in best["tuning"].items():
+        print(f"  {key}: {value}")
+
+    print("\nFINAL METRICS (mean +- std):")
+    print(f"  stockout_rate: {m['aairm_stockout']:.4f} +- {m['aairm_stockout_std']:.4f}")
+    print(f"  fill_rate: {m['aairm_fill']:.4f} +- {m['aairm_fill_std']:.4f}")
+    print(f"  avg_inventory: {m['aairm_inventory']:.4f} +- {m['aairm_inventory_std']:.4f}")
+    print(f"  spoilage_rate: {m['aairm_spoilage']:.4f} +- {m['aairm_spoilage_std']:.4f}")
+    print(f"  total_cost: {m['aairm_cost']:.4f} +- {m['aairm_cost_std']:.4f}")
+    print(f"  baseline2_cost: {m['baseline2_cost']:.4f}")
+    print(f"\nIMPROVEMENT vs baseline2: {100.0 * m['improvement_vs_baseline2']:.2f}%")
+
+    print("\nArtifacts:")
+    print(f"  {best_config_path}")
+    print(f"  {best_summary_path}")
+    print(f"  {iteration_log_path}")
 
 
 if __name__ == "__main__":

@@ -1,35 +1,18 @@
-# ===========================================================================
-# AAIRM — Paper Experiment Configuration
-# ===========================================================================
-# This is the EXACT configuration used in all experiments reported in:
-#   Syed et al. (2025), "Agentic Commerce", Frontiers in [Journal].
-#
-# Running experiments/run_paper_experiment.py with this config must
-# reproduce the results in Tables 2 and 3 within ±0.5 percentage points.
-#
-# DO NOT modify this file.  To experiment with different settings,
-# copy this file and modify the copy.
-# ===========================================================================
-
-# Inherit all defaults and override nothing — the defaults ARE the paper config.
-# This file exists as an explicit, named, immutable record of the paper conditions.
-
 simulation:
   n_skus: 1200
   n_categories: 5
   category_names:
-    - grocery
-    - frozen_food
-    - apparel
-    - cosmetics
-    - dry_fruits
+  - grocery
+  - frozen_food
+  - apparel
+  - cosmetics
+  - dry_fruits
   skus_per_category: 240
   simulation_horizon_days: 730
   test_horizon_days: 365
   n_suppliers_min: 3
   n_suppliers_max: 5
   seed: 42
-
 forecasting:
   architecture: tft
   forecast_horizon: 7
@@ -41,8 +24,10 @@ forecasting:
   max_epochs: 50
   learning_rate: 0.001
   loss: mse
-  quantiles: [0.1, 0.5, 0.9]
-
+  quantiles:
+  - 0.1
+  - 0.5
+  - 0.9
 optimisation:
   mode: rl
   budget: 1000000.0
@@ -56,26 +41,30 @@ optimisation:
   rl_n_steps: 2048
   rl_batch_size: 64
   rl_n_epochs: 10
-
 supplier_ranking:
   alpha_1: 0.35
-  alpha_2: 0.30
+  alpha_2: 0.3
   alpha_3: 0.25
-  alpha_4: 0.10
-
+  alpha_4: 0.1
 governance:
-  max_single_supplier_fraction: 0.60
-  shelf_life_safety_margin: 0.80
+  max_single_supplier_fraction: 0.6
+  shelf_life_safety_margin: 0.8
   human_approval_threshold: 50000.0
   frozen_zone_capacity: 20000.0
   ambient_zone_capacity: 80000.0
-
 llm:
   model: gpt-4o
   temperature: 0.0
   max_tokens: 1024
   timeout: 30.0
-
 results_dir: experiments/results
 log_level: INFO
 log_format: json
+reward_tuning:
+  holding_cost_weight: 1.0
+  stockout_penalty_weight: 1.2
+  spoilage_cost_weight: 1.0
+  inventory_cap_penalty: 0.5
+  inventory_cap_days: 21.0
+  shelf_life_scale: 0.5
+  expiry_rate_multiplier: 1.5

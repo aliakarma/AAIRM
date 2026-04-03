@@ -28,6 +28,24 @@ def _parse_seeds(text: str) -> list[int]:
     return [int(x.strip()) for x in text.split(",") if x.strip()]
 
 
+def _load_runtime_overrides(config_path: str) -> tuple[dict, dict]:
+    """Load tuning values from YAML config."""
+    from omegaconf import OmegaConf
+
+    raw = OmegaConf.to_container(OmegaConf.load(config_path), resolve=True)
+    if not isinstance(raw, dict):
+        raise ValueError(f"Invalid config payload in {config_path}")
+
+    sim = raw.get("simulation", {}) if isinstance(raw.get("simulation", {}), dict) else {}
+    opt = raw.get("optimisation", {}) if isinstance(raw.get("optimisation", {}), dict) else {}
+    tuning = raw.get("reward_tuning", {}) if isinstance(raw.get("reward_tuning", {}), dict) else {}
+    return {
+        "seed": int(sim.get("seed", 42)),
+        "n_skus": int(sim.get("n_skus", 100)),
+        "rl_episodes": int(opt.get("rl_training_episodes", 80)),
+    }, tuning
+
+
 def build_smoke_config(seed: int, n_skus: int, rl_episodes: int) -> AAIRMConfig:
     cfg = AAIRMConfig()
     cats = ["grocery", "frozen_food", "apparel", "cosmetics", "dry_fruits"]
@@ -146,11 +164,17 @@ def run_smoke(
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Run AAIRM fast multi-seed smoke benchmark")
+    parser.add_argument(
+        "--config",
+        type=str,
+        default=None,
+        help="Optional YAML config. If provided, reads simulation + reward_tuning values.",
+    )
     parser.add_argument("--seeds", type=str, default="42,43,44")
     parser.add_argument("--n-skus", type=int, default=100)
     parser.add_argument("--episodes", type=int, default=80)
-    parser.add_argument("--holding-cost-weight", type=float, default=2.0)
-    parser.add_argument("--stockout-penalty-weight", type=float, default=0.8)
+    parser.add_argument("--holding-cost-weight", type=float, default=1.0)
+    parser.add_argument("--stockout-penalty-weight", type=float, default=1.2)
     parser.add_argument("--spoilage-cost-weight", type=float, default=1.0)
     parser.add_argument("--inventory-cap-penalty", type=float, default=0.5)
     parser.add_argument("--inventory-cap-days", type=float, default=21.0)
@@ -159,21 +183,40 @@ def main() -> None:
     parser.add_argument("--out-dir", type=str, default="experiments/results/smoke_multiseed")
     args = parser.parse_args()
 
+    runtime_overrides: dict[str, int] = {}
+    config_tuning: dict[str, float] = {}
+    if args.config:
+        runtime_overrides, config_tuning = _load_runtime_overrides(args.config)
+
     seeds = _parse_seeds(args.seeds)
+    n_skus = args.n_skus
+    episodes = args.episodes
     tuning = {
-        "holding_cost_weight": args.holding_cost_weight,
-        "stockout_penalty_weight": args.stockout_penalty_weight,
-        "spoilage_cost_weight": args.spoilage_cost_weight,
-        "inventory_cap_penalty": args.inventory_cap_penalty,
-        "inventory_cap_days": args.inventory_cap_days,
-        "shelf_life_scale": args.shelf_life_scale,
-        "expiry_rate_multiplier": args.expiry_rate_multiplier,
+        "holding_cost_weight": float(
+            config_tuning.get("holding_cost_weight", args.holding_cost_weight)
+        ),
+        "stockout_penalty_weight": float(
+            config_tuning.get("stockout_penalty_weight", args.stockout_penalty_weight)
+        ),
+        "spoilage_cost_weight": float(
+            config_tuning.get("spoilage_cost_weight", args.spoilage_cost_weight)
+        ),
+        "inventory_cap_penalty": float(
+            config_tuning.get("inventory_cap_penalty", args.inventory_cap_penalty)
+        ),
+        "inventory_cap_days": float(
+            config_tuning.get("inventory_cap_days", args.inventory_cap_days)
+        ),
+        "shelf_life_scale": float(config_tuning.get("shelf_life_scale", args.shelf_life_scale)),
+        "expiry_rate_multiplier": float(
+            config_tuning.get("expiry_rate_multiplier", args.expiry_rate_multiplier)
+        ),
     }
 
     runs, summary = run_smoke(
         seeds=seeds,
-        n_skus=args.n_skus,
-        rl_episodes=args.episodes,
+        n_skus=n_skus,
+        rl_episodes=episodes,
         tuning=tuning,
     )
 
@@ -197,8 +240,8 @@ def main() -> None:
         json.dumps(
             {
                 "seeds": seeds,
-                "n_skus": args.n_skus,
-                "episodes": args.episodes,
+                "n_skus": n_skus,
+                "episodes": episodes,
                 "tuning": tuning,
                 "runs": runs,
                 "summary": summary,

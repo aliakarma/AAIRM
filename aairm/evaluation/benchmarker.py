@@ -181,7 +181,7 @@ class Benchmarker:
         daily_rewards = []
         procurement_volumes: dict[str, dict[str, float]] = {cat: {} for cat in self._categories}
 
-        for _ in range(self._test_days):
+        for day in range(self._test_days):
             state = AgentState(day=day)
             state = self._orch.run_cycle(state)
 
@@ -265,7 +265,7 @@ class Benchmarker:
         daily_spoilage_units = []
         procurement_volumes: dict[str, dict[str, float]] = {c: {} for c in self._categories}
 
-        for _ in range(self._test_days):
+        for day in range(self._test_days):
             snap = env.get_inventory_snapshot()
             orders = self._bl1.get_orders(snap)
 
@@ -348,7 +348,7 @@ class Benchmarker:
         daily_spoilage_units = []
         procurement_volumes: dict[str, dict[str, float]] = {c: {} for c in self._categories}
 
-        for _ in range(self._test_days):
+        for day in range(self._test_days):
             snap = env.get_inventory_snapshot()
 
             # Build feature matrix for today
