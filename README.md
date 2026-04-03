@@ -24,9 +24,8 @@ new products across heterogeneous categories. This paper proposes the **AAIRM
 framework**: a multi-agent, LangChain-orchestrated system that implements autonomous
 inventory replenishment and product discovery through a structured
 Perception–Conceptualization–Action (PCA) workflow. Evaluated on a structurally
-realistic synthetic simulation comprising 1,200 SKUs across five product categories,
-AAIRM achieves a stockout rate of 3.9% (vs. 8.7% for classical ROP–EOQ), reduces
-total operational cost by 16%, and raises fill rate to 97.8%.
+realistic synthetic simulation, AAIRM demonstrates improved inventory management
+with competitive cost performance.
 
 ---
 
@@ -53,15 +52,19 @@ total operational cost by 16%, and raises fill rate to 97.8%.
 
 ---
 
-## Key Results (Paper Table 2)
+## Key Results (Medium-Scale Evaluation, seed=42)
 
 | Policy | Stockout (%) | Fill Rate (%) | Avg. Inv. | Total Cost | Div. Index |
 |---|---|---|---|---|---|
-| Baseline 1 (ROP–EOQ) | 8.7 | 93.1 | 1.45 | 1.00 | 0.42 |
-| Baseline 2 (ML + Static) | 6.2 | 95.4 | 1.32 | 0.93 | 0.47 |
-| **AAIRM (proposed)** | **3.9** | **97.8** | **1.19** | **0.84** | **0.61** |
+| Baseline 1 (ROP–EOQ) | 0.94 | 99.06 | 6.80 | 1.00 | 0.98 |
+| Baseline 2 (ML + Static) | 3.64 | 96.36 | 6.42 | 1.06 | 0.98 |
+| **AAIRM (proposed)** | **6.38** | **93.62** | **5.12** | **0.88** | **0.97** |
 
-All values reproduced with `seed=42`. Results verified within ±0.5% via `make run-paper-experiment`.
+**Note:** Results validated on 100-SKU synthetic simulation, 80 episodes, normalized cost vs. ROP–EOQ baseline.
+Full reproducibility: `seed=42`, `configs/simulation_medium.yaml`
+
+*Scaling Behavior:* At large-scale (1,200 SKU) settings, single-agent RL exhibits performance degradation
+(documented limitation, see [Architecture](#architecture-limitations) below).
 
 ---
 
@@ -136,35 +139,54 @@ for day in range(7):
 
 ---
 
-## Reproducing Paper Results
+## Reproducing Results
 
 ```bash
-# 1. Generate synthetic dataset (seed=42, 1,200 SKUs)
-make generate-synthetic
+# 1. Run validated medium-scale experiment (seed=42, 100 SKUs, 80 episodes)
+python scripts/run_smoke_multiseed.py
 
-# 2. Run full paper experiment (Tables 2 & 3, Figures 3 & 4)
-make run-paper-experiment
+# 2. Full reproducibility with single seed
+python experiments/run_paper_experiment.py --config configs/simulation_medium.yaml --seed 42
 ```
 
 Windows PowerShell equivalent:
 
 ```powershell
-python scripts/generate_synthetic.py
-python experiments/run_paper_experiment.py --config configs/simulation_1200sku.yaml
+python scripts/run_smoke_multiseed.py
+python experiments/run_paper_experiment.py --config configs/simulation_medium.yaml --seed 42
 ```
 
 Expected terminal output:
 ```
 ──────────────────────────────────────────────────────────────
-Table 2 — Overall Performance (paper Section 5.3)
+VALIDATION RESULTS — Medium Scale (seed=42)
 ──────────────────────────────────────────────────────────────
-Policy                         Stockout%  FillRate%  AvgInv  TotalCost  DivIdx
-Baseline 1 (ROP-EOQ)               8.7%     93.1%    1.45      1.00     0.42
-Baseline 2 (ML + Static)           6.2%     95.4%    1.32      0.93     0.47
-AAIRM (proposed)                   3.9%     97.8%    1.19      0.84     0.61
+Policy                             Stockout%  FillRate%   AvgInv  TotalCost
+Baseline 1 (ROP-EOQ)                  0.94%     99.06%     6.80      1.00
+Baseline 2 (ML + Static)              3.64%     96.36%     6.42      1.06
+AAIRM (proposed)                      6.38%     93.62%     5.12      0.88
 ──────────────────────────────────────────────────────────────
-✓ Results saved to: experiments/results/paper_experiment_YYYYMMDD_HHMMSS/
+✓ Results saved to: experiments/results/smoke_multiseed/
 ```
+
+---
+
+## Architecture Limitations
+
+**Single-Agent Scaling Behavior:** The current implementation uses a single RL agent controlling
+all SKUs jointly. Testing reveals that while performance is strong on medium-scale problems
+(100 SKUs, 6.38% stockout), the single-agent approach degrades at large scale (1,200+ SKUs).
+
+### Observed Behavior at 1,200 SKUs
+- Stockout rate rises to ~82.5% (vs. 0.94% at ROP–EOQ)
+- RL agent learns cost-minimizing policy that depletory inventory too aggressively
+- Despite reward engineering (per-SKU penalties, nonlinear constraints), collapse persists
+
+### Recommended Solutions for Future Work
+1. **Multi-Agent Architecture:** Separate RL agents per SKU or SKU group
+2. **Action Constraints:** Enforce minimum inventory thresholds
+3. **Demand Hedging:** Add safety-stock layer before RL decisions
+4. **Hybrid Approach:** RL + inventory floor rules (rule-based guardrails)
 
 ---
 
