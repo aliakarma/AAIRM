@@ -258,6 +258,27 @@ class DemandGenerator:
 
         # --- Combine ---
         demand = base[:, None] * seasonal * promo * noise
+
+        # --- Category-specific demand scaling (lightweight heterogeneity) ---
+        # Apply realistic demand patterns per category:
+        #   grocery:     1.2x (staple, high volume)
+        #   frozen_food: 0.8x (specialized, lower volume)
+        #   apparel:     0.6x (seasonal, lower base demand)
+        #   cosmetics:   0.9x (moderate, steady demand)
+        #   dry_fruits:  1.1x (high-margin, elevated demand)
+        category_multipliers = {
+            "grocery": 1.2,
+            "frozen_food": 0.8,
+            "apparel": 0.6,
+            "cosmetics": 0.9,
+            "dry_fruits": 1.1,
+        }
+        for i, sku_id in enumerate(self._sku_ids):
+            rec = self._catalog.get(sku_id)
+            if rec:
+                multiplier = category_multipliers.get(rec.category, 1.0)
+                demand[i, :] *= multiplier
+
         return np.maximum(0.0, np.round(demand, 2))
 
     def _idx_of(self, sku_id: str) -> int | None:

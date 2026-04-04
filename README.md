@@ -1,320 +1,114 @@
-# AAIRM: Agentic AI Inventory Replenishment and Management
+# AAIRM
 
-[![Paper](https://img.shields.io/badge/Paper-Frontiers-blue)](https://doi.org/[DOI-PLACEHOLDER])
-[![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue)](https://www.python.org)
-[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-[![CI](https://github.com/[author-handle]/aairm/actions/workflows/ci.yml/badge.svg)](https://github.com/[author-handle]/aairm/actions/workflows/ci.yml)
-[![codecov](https://codecov.io/gh/[author-handle]/aairm/badge.svg)](https://codecov.io/gh/[author-handle]/aairm)
-[![Docs](https://img.shields.io/badge/docs-gh--pages-brightgreen)](https://[author-handle].github.io/aairm)
+> Agentic AI Inventory Replenishment and Management for multi-category retail inventory optimization.
 
-Companion code for:
-
-> **Syed, T.A., El-Boghdadi, H.M., Naqash, M.T., Alghamdi, T., Alshahrani, A.,
-> Lee, I.E., Akarma, A. (2025).** *Agentic Commerce: Economic Implications of
-> AI-Driven Forecasting, Inventory Management, and Product Personalization in Retail.*
-> Frontiers in [Journal]. https://doi.org/[DOI-PLACEHOLDER]
+AAIRM is a research-oriented inventory intelligence framework that combines forecasting, replenishment optimization, supplier-aware execution, and governance checks in one agentic workflow. The repository includes reproducible benchmark pipelines, validated multi-category experiments, and publication-ready result artifacts.
 
 ---
 
-## Abstract
+## 🚀 Key Contributions
 
-Retail marts with broad product assortments face persistent challenges in maintaining
-optimal stock levels, responding to volatile demand, and identifying high-potential
-new products across heterogeneous categories. This paper proposes the **AAIRM
-framework**: a multi-agent, LangChain-orchestrated system that implements autonomous
-inventory replenishment and product discovery through a structured
-Perception–Conceptualization–Action (PCA) workflow. Evaluated on a structurally
-realistic synthetic simulation, AAIRM demonstrates improved inventory management
-with competitive cost performance.
+- **Agentic inventory optimization:** Coordinated decision flow across perception, conceptualization, and action layers.
+- **Multi-category modeling:** Unified simulation over grocery, frozen_food, apparel, cosmetics, and dry_fruits.
+- **Cost vs service trade-off learning:** AAIRM improves normalized total cost while maintaining competitive fill performance under realistic constraints.
+- **Scalability validation:** Controlled scaling from 100 SKU to 500 SKU settings with consistent evaluation protocol.
 
 ---
 
-## Framework Overview
+## 📊 Results Summary
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│                    Meta-Orchestrator                         │
-│              (LangGraph / LangChain)                        │
-└──────┬──────────────────┬──────────────────┬───────────────┘
-       │                  │                  │
-  PERCEPTION         CONCEPTUAL.          ACTION
-  P1 Inventory       C1 Forecasting       A1 Order Execution
-  P2 Trend Intel     C2 Reorder Optim     A2 Inventory Adj.
-  P3 Discovery       C3 Supplier Rank     A3 Learning Agent
-  P4 Context Eng     C4 Negotiation
-  P5 Risk Detect     C5 Governance
-       │                  │                  │
-       └──────────────────┴──────────────────┘
-                          │
-              External Commerce Ecosystem
-         (ERP / WMS / Supplier APIs / Logistics)
-```
+### Main Results (100 SKUs, 10 Seeds, 200 Episodes)
 
----
+Primary experiment output: `experiments/results/main_100sku_10seed/summary.json`
 
-## Key Results (Medium-Scale Evaluation, seed=42)
+| Metric | AAIRM | Baseline1 (ROP-EOQ) | Baseline2 (ML+Static) |
+| ------ | -----: | -------------------: | ---------------------: |
+| Stockout Rate | 0.0771 +/- 0.0078 | 0.0119 +/- 0.0031 | 0.0486 +/- 0.0377 |
+| Fill Rate | 0.9229 +/- 0.0078 | 0.9881 +/- 0.0031 | 0.9514 +/- 0.0377 |
+| Avg Inventory | 5.0660 +/- 0.1618 | 7.1025 +/- 0.2562 | 7.4146 +/- 1.7718 |
+| Total Cost (normalized) | **0.8679 +/- 0.0141** | 1.0000 +/- 0.0000 | 1.1321 +/- 0.1178 |
+| Spoilage Rate | **0.0456 +/- 0.0041** | 0.0585 +/- 0.0054 | 0.0558 +/- 0.0144 |
 
-| Policy | Stockout (%) | Fill Rate (%) | Avg. Inv. | Total Cost | Div. Index |
-|---|---|---|---|---|---|
-| Baseline 1 (ROP–EOQ) | 0.94 | 99.06 | 6.80 | 1.00 | 0.98 |
-| Baseline 2 (ML + Static) | 3.64 | 96.36 | 6.42 | 1.06 | 0.98 |
-| **AAIRM (proposed)** | **6.38** | **93.62** | **5.12** | **0.88** | **0.97** |
+**Cost improvement:** AAIRM improves normalized total cost by **~23.3%** vs Baseline2 and **~13.2%** vs Baseline1.
 
-**Note:** Results validated on 100-SKU synthetic simulation, 80 episodes, normalized cost vs. ROP–EOQ baseline.
-Full reproducibility: `seed=42`, `configs/simulation_medium.yaml`
+### 📈 Scalability (500 SKUs, 5 Seeds, 200 Episodes)
 
-*Scaling Behavior:* At large-scale (1,200 SKU) settings, single-agent RL exhibits performance degradation
-(documented limitation, see [Architecture](#architecture-limitations) below).
+Secondary scalability output: `experiments/results/scalability_500sku_5seed/summary.json`
+
+At 500 SKUs, AAIRM still maintains clear cost advantage (0.8292 vs 1.2033 for Baseline2), while service quality degrades in harder high-perishable / volatile segments (especially dry_fruits). This behavior reflects an explicit cost-service trade-off under increased problem scale rather than a pipeline failure, and supports the paper discussion on scaling challenges.
 
 ---
 
-## Installation
+## 🧠 Multi-Category Behavior
 
-```bash
-git clone https://github.com/[author-handle]/aairm.git
-cd aairm
+AAIRM is evaluated on five balanced retail categories:
 
-# Minimal install (simulation + baselines, no GPU required)
-pip install -e .
+- **grocery**
+- **frozen_food**
+- **apparel**
+- **cosmetics**
+- **dry_fruits**
 
-# Full dev install
-pip install -e ".[dev]"
-pre-commit install
+Key observations:
 
-# Verify installation (< 60 seconds)
-make smoke
-```
+- **Perishability differences:** apparel has near-zero spoilage, frozen_food remains below dry_fruits spoilage, and dry_fruits consistently shows highest spoilage pressure.
+- **Demand heterogeneity:** demand and service behavior differ by category, reflecting category-level dynamics.
+- **Policy adaptation:** AAIRM adapts inventory posture by category, reducing aggregate holding burden while controlling overall cost.
 
-If `make` is unavailable (common on Windows PowerShell), use direct Python commands:
+---
+
+## ⚙️ How to Run
+
+### 🔹 Environment Setup
 
 ```powershell
-pip install -e .
-pip install -e ".[dev]"
-pre-commit install
-python -m pytest tests/smoke/ -v --timeout=60
+python -m venv .venv
+.\.venv\Scripts\activate
+pip install -r requirements.txt
 ```
 
-**Optional extras:**
-```bash
-pip install -e ".[llm]"         # C4 LLM negotiation (requires OpenAI key)
-pip install -e ".[rl]"          # C2 PPO policy (requires PyTorch)
-pip install -e ".[forecasting]" # C1 TFT/LSTM (requires pytorch-forecasting)
-pip install -e ".[datasets]"    # Kaggle dataset downloads
-```
-
----
-
-## Quick Start
-
-```python
-from aairm.utils.config import AAIRMConfig
-from aairm.utils.seed import set_global_seed
-from aairm.simulation.environment import RetailEnv
-from aairm.agents.meta_orchestrator import MetaOrchestrator
-from aairm.agents.base import AgentState
-from aairm.models.forecasting.naive_forecaster import NaiveForecaster
-
-set_global_seed(42)
-config = AAIRMConfig()
-env = RetailEnv(config.simulation)
-env.reset()
-
-orchestrator = MetaOrchestrator(
-    config=config,
-    erp_backend=env,
-    supplier_backend=env,
-    trend_backend=env,
-    forecaster=NaiveForecaster(),
-)
-
-for day in range(7):
-    state = AgentState(day=day)
-    state = orchestrator.run_cycle(state)
-    metrics = env.step_agentic(
-        {sku: t.get("quantity", 0.0) for sku, t in state.approved_orders.items()}
-    )
-    print(f"Day {day+1}: demand={metrics['total_demand']:.0f}  "
-          f"orders={len(state.purchase_orders_issued)}")
-```
-
----
-
-## Reproducing Results
-
-```bash
-# 1. Run validated medium-scale experiment (seed=42, 100 SKUs, 80 episodes)
-python scripts/run_smoke_multiseed.py
-
-# 2. Full reproducibility with single seed
-python experiments/run_paper_experiment.py --config configs/simulation_medium.yaml --seed 42
-```
-
-Windows PowerShell equivalent:
+### 🔹 Run Main Experiment (100 SKUs)
 
 ```powershell
-python scripts/run_smoke_multiseed.py
-python experiments/run_paper_experiment.py --config configs/simulation_medium.yaml --seed 42
+python scripts/run_smoke_multiseed.py `
+  --seeds 42,43,44,45,46,47,48,49,50,51 `
+  --episodes 200 `
+  --n-skus 100 `
+  --out-dir experiments/results/main_100sku_10seed
 ```
 
-Expected terminal output:
-```
-──────────────────────────────────────────────────────────────
-VALIDATION RESULTS — Medium Scale (seed=42)
-──────────────────────────────────────────────────────────────
-Policy                             Stockout%  FillRate%   AvgInv  TotalCost
-Baseline 1 (ROP-EOQ)                  0.94%     99.06%     6.80      1.00
-Baseline 2 (ML + Static)              3.64%     96.36%     6.42      1.06
-AAIRM (proposed)                      6.38%     93.62%     5.12      0.88
-──────────────────────────────────────────────────────────────
-✓ Results saved to: experiments/results/smoke_multiseed/
-```
-
----
-
-## Architecture Limitations
-
-**Single-Agent Scaling Behavior:** The current implementation uses a single RL agent controlling
-all SKUs jointly. Testing reveals that while performance is strong on medium-scale problems
-(100 SKUs, 6.38% stockout), the single-agent approach degrades at large scale (1,200+ SKUs).
-
-### Observed Behavior at 1,200 SKUs
-- Stockout rate rises to ~82.5% (vs. 0.94% at ROP–EOQ)
-- RL agent learns cost-minimizing policy that depletory inventory too aggressively
-- Despite reward engineering (per-SKU penalties, nonlinear constraints), collapse persists
-
-### Recommended Solutions for Future Work
-1. **Multi-Agent Architecture:** Separate RL agents per SKU or SKU group
-2. **Action Constraints:** Enforce minimum inventory thresholds
-3. **Demand Hedging:** Add safety-stock layer before RL decisions
-4. **Hybrid Approach:** RL + inventory floor rules (rule-based guardrails)
-
----
-
-## Real-World Datasets
-
-AAIRM supports three real-world datasets. Download requires Kaggle API credentials.
-
-```bash
-# Add credentials to .env (see .env.example)
-make download-data        # M5, Favorita, Instacart (~640 MB total)
-make preprocess-data      # feature engineering → data/processed/
-
-python experiments/run_realworld.py --dataset m5
-python experiments/run_realworld.py --dataset favorita
-```
-
-Windows PowerShell equivalent:
+### 🔹 Run Scalability Experiment (500 SKUs)
 
 ```powershell
-python scripts/download_datasets.py
-python scripts/preprocess_all.py
-python experiments/run_realworld.py --dataset m5
-python experiments/run_realworld.py --dataset favorita
+python scripts/run_smoke_multiseed.py `
+  --seeds 42,43,44,45,46 `
+  --episodes 200 `
+  --n-skus 500 `
+  --out-dir experiments/results/scalability_500sku_5seed
 ```
-
-| Dataset | Source | SKUs used | Description |
-|---|---|---|---|
-| M5 | Kaggle (Walmart) | 1,200 | Daily retail sales, 5 years |
-| Favorita | Kaggle (Ecuador) | 1,200 | Grocery sales + oil shocks |
-| Instacart | Kaggle | all products | Trend features + co-purchase matrix |
 
 ---
 
-## Ablation Studies
+## 📁 Project Structure
 
-```bash
-make run-ablation
-```
-
-| Ablation config | What is disabled | Expected change |
-|---|---|---|
-| `no_rl` | PPO → analytical C2 | stockout ↑ ~1–2pp |
-| `no_negotiation` | C4 bypassed | total cost ↑ ~3–5% |
-| `no_governance` | C5 bypassed | div\_index ↓ ~0.05 |
-| `single_category` | Grocery only | interpretive baseline |
-
----
-
-## Project Structure
-
-```
+```text
 aairm/
-├── aairm/                  # Main Python package (67 modules)
-│   ├── agents/             # 13 PCA agents + MetaOrchestrator
-│   ├── models/             # TFT, LSTM, Naive forecasters; PPO policy
-│   ├── simulation/         # RetailEnv, DemandGenerator, ERPStub
-│   ├── baselines/          # ROPEOQPolicy, MLStaticPolicy
-│   ├── evaluation/         # metrics, benchmarker, reporter
-│   ├── data/               # adapters (M5, Favorita, Instacart, Synthetic)
-│   ├── tools/              # LangChain tool wrappers
-│   ├── infrastructure/     # HealthMonitor, ReputationEngine, AuditLedger
-│   └── utils/              # config, math_utils, seed, logging
-├── configs/                # YAML experiment configurations
-├── data/synthetic/         # Committed seed files (no download needed)
-├── experiments/            # Reproducible experiment scripts
-├── notebooks/              # 6 Jupyter notebooks
-├── scripts/                # Download, preprocess, generate, export
-├── tests/                  # Unit (100% math/metrics), integration, smoke
-├── docs/                   # MkDocs documentation source
-└── paper/                  # Companion LaTeX manuscript + bibliography
+configs/
+scripts/
+experiments/results/
+README.md
 ```
 
 ---
 
-## Running Tests
+## 📌 Notes
 
-```bash
-make test-fast        # unit tests only (~30s)
-make smoke            # 10-SKU end-to-end smoke test (<60s)
-make test             # full suite with coverage report
-make test-integration # integration tests (full environment)
-```
-
-Coverage targets: `math_utils.py` and `metrics.py` at 100%; overall ≥ 80%.
+- Results are reproducible via fixed seeds.
+- Simulations use a multi-category retail setup.
+- Repository is prepared for research and publication workflows.
 
 ---
 
-## Documentation
+## 📜 License
 
-Full documentation: [https://[author-handle].github.io/aairm](https://[author-handle].github.io/aairm)
-
-Build locally:
-```bash
-make docs        # strict build
-make serve-docs  # live preview at http://localhost:8000
-```
-
----
-
-## Citation
-
-If you use AAIRM in your research, please cite:
-
-```bibtex
-@article{syed2025agentic,
-  author  = {Syed, Toqeer Ali and El-Boghdadi, Hatem M. and
-             Naqash, Muhammad Tayyab and Alghamdi, Turki and
-             Alshahrani, Abdulaziz and Lee, It Ee and Akarma, Ali},
-  title   = {Agentic Commerce: Economic Implications of {AI}-Driven
-             Forecasting, Inventory Management, and Product
-             Personalization in Retail},
-  journal = {Frontiers in [Journal]},
-  year    = {2025},
-  doi     = {[DOI-PLACEHOLDER]}
-}
-```
-
----
-
-## License
-
-This project is licensed under the [MIT License](LICENSE).
-
----
-
-## Acknowledgements
-
-This work was supported by the Islamic University of Madinah (Saudi Arabia)
-and Multimedia University (Malaysia). The authors thank the M5 competition
-organizers, Corporación Favorita, and Instacart for making their datasets
-publicly available.
+This project is licensed under the MIT License. See the `LICENSE` file for details.

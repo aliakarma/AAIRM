@@ -131,14 +131,19 @@ def run_for_seed(
     return {
         "seed": seed,
         "baseline1": results["baseline1"].overall,
+        "baseline1_per_category": results["baseline1"].per_category,
         "baseline2": results["baseline2"].overall,
+        "baseline2_per_category": results["baseline2"].per_category,
         "aairm": results["aairm"].overall,
+        "aairm_per_category": results["aairm"].per_category,
         "aairm_reward_raw": results["aairm"].timeseries.get("reward_raw", np.array([])).tolist(),
     }
 
 
 def summarize(seed_runs: list[dict]) -> dict:
     out: dict[str, dict[str, dict[str, float]]] = {}
+    per_cat: dict[str, dict[str, dict[str, dict[str, float]]]] = {}
+
     for policy in ["baseline1", "baseline2", "aairm"]:
         out[policy] = {}
         keys = seed_runs[0][policy].keys()
@@ -148,7 +153,29 @@ def summarize(seed_runs: list[dict]) -> dict:
                 "mean": float(np.mean(values)),
                 "std": float(np.std(values)),
             }
-    return out
+
+        # Aggregate per-category metrics
+        per_cat_key = f"{policy}_per_category"
+        if per_cat_key in seed_runs[0] and seed_runs[0][per_cat_key]:
+            per_cat[policy] = {}
+            first_run_cats = seed_runs[0][per_cat_key]
+            for cat_name in first_run_cats:
+                per_cat[policy][cat_name] = {}
+                cat_metrics = first_run_cats[cat_name].keys()
+                for metric in cat_metrics:
+                    values = [
+                        float(run[per_cat_key].get(cat_name, {}).get(metric, 0.0))
+                        for run in seed_runs
+                    ]
+                    per_cat[policy][cat_name][metric] = {
+                        "mean": float(np.mean(values)),
+                        "std": float(np.std(values)),
+                    }
+
+    return {
+        "overall": out,
+        "per_category": per_cat,
+    }
 
 
 def run_smoke(
@@ -223,8 +250,9 @@ def main() -> None:
     print("\n============================================================")
     print(f"AAIRM Fast Multi-Seed Smoke Summary ({len(seeds)} seeds)")
     print("============================================================")
+    overall = summary.get("overall", summary)  # backward compatibility
     for policy in ["baseline1", "baseline2", "aairm"]:
-        m = summary[policy]
+        m = overall[policy]
         print(
             f"{policy:<10} "
             f"stockout={m['stockout_rate']['mean']:.4f}+-{m['stockout_rate']['std']:.4f}  "

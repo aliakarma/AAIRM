@@ -181,7 +181,13 @@ class Benchmarker:
         daily_rewards = []
         procurement_volumes: dict[str, dict[str, float]] = {cat: {} for cat in self._categories}
 
-        for day in range(self._test_days):
+        # Per-category tracking
+        daily_demand_by_cat: dict[str, list[float]] = {cat: [] for cat in self._categories}
+        daily_fulfilled_by_cat: dict[str, list[float]] = {cat: [] for cat in self._categories}
+        daily_on_hand_by_cat: dict[str, list[float]] = {cat: [] for cat in self._categories}
+        daily_spoilage_by_cat: dict[str, list[float]] = {cat: [] for cat in self._categories}
+
+        for _ in range(self._test_days):
             state = AgentState(day=day)
             state = self._orch.run_cycle(state)
 
@@ -197,6 +203,34 @@ class Benchmarker:
             daily_demand.append(day_demand)
             daily_fulfilled.append(day_fulfilled)
             daily_on_hand.append(sum(rec.get("on_hand", 0.0) for rec in snap.values()))
+
+            # Compute per-category metrics
+            for cat in self._categories:
+                cat_demand = sum(
+                    rec.get("last_demand", 0.0)
+                    for sku, rec in snap.items()
+                    if rec.get("category") == cat
+                )
+                cat_fulfilled = sum(
+                    rec.get("last_fulfilled", 0.0)
+                    for sku, rec in snap.items()
+                    if rec.get("category") == cat
+                )
+                cat_on_hand = sum(
+                    rec.get("on_hand", 0.0)
+                    for sku, rec in snap.items()
+                    if rec.get("category") == cat
+                )
+                cat_spoilage = sum(
+                    rec.get("last_expired", 0.0)
+                    for sku, rec in snap.items()
+                    if rec.get("category") == cat
+                )
+
+                daily_demand_by_cat[cat].append(cat_demand)
+                daily_fulfilled_by_cat[cat].append(cat_fulfilled)
+                daily_on_hand_by_cat[cat].append(cat_on_hand)
+                daily_spoilage_by_cat[cat].append(cat_spoilage)
 
             proc = float(metrics.get("ordering_cost", 0.0))
             hold = sum(
@@ -241,10 +275,14 @@ class Benchmarker:
         overall["total_cost_raw"] = raw_total_cost
         overall["spoilage_rate"] = float(sum(daily_spoilage_units) / max(sum(daily_demand), 1e-9))
 
+        per_category = self._compute_per_category_metrics(
+            daily_demand_by_cat, daily_fulfilled_by_cat, daily_on_hand_by_cat, daily_spoilage_by_cat
+        )
+
         return BenchmarkResult(
             policy_name="AAIRM (proposed)",
             overall=overall,
-            per_category=self._per_category_stub(),
+            per_category=per_category,
             timeseries={
                 "demand": np.array(daily_demand),
                 "fulfilled": np.array(daily_fulfilled),
@@ -264,6 +302,12 @@ class Benchmarker:
         daily_proc_cost, daily_hold_cost, daily_penalty_cost, daily_spoilage_cost = [], [], [], []
         daily_spoilage_units = []
         procurement_volumes: dict[str, dict[str, float]] = {c: {} for c in self._categories}
+
+        # Per-category tracking
+        daily_demand_by_cat: dict[str, list[float]] = {cat: [] for cat in self._categories}
+        daily_fulfilled_by_cat: dict[str, list[float]] = {cat: [] for cat in self._categories}
+        daily_on_hand_by_cat: dict[str, list[float]] = {cat: [] for cat in self._categories}
+        daily_spoilage_by_cat: dict[str, list[float]] = {cat: [] for cat in self._categories}
 
         for day in range(self._test_days):
             snap = env.get_inventory_snapshot()
@@ -298,6 +342,35 @@ class Benchmarker:
             daily_demand.append(day_demand)
             daily_fulfilled.append(day_fulfilled)
             daily_on_hand.append(sum(r.get("on_hand", 0.0) for r in snap.values()))
+
+            # Compute per-category metrics
+            for cat in self._categories:
+                cat_demand = sum(
+                    rec.get("last_demand", 0.0)
+                    for sku, rec in snap.items()
+                    if rec.get("category") == cat
+                )
+                cat_fulfilled = sum(
+                    rec.get("last_fulfilled", 0.0)
+                    for sku, rec in snap.items()
+                    if rec.get("category") == cat
+                )
+                cat_on_hand = sum(
+                    rec.get("on_hand", 0.0)
+                    for sku, rec in snap.items()
+                    if rec.get("category") == cat
+                )
+                cat_spoilage = sum(
+                    rec.get("last_expired", 0.0)
+                    for sku, rec in snap.items()
+                    if rec.get("category") == cat
+                )
+
+                daily_demand_by_cat[cat].append(cat_demand)
+                daily_fulfilled_by_cat[cat].append(cat_fulfilled)
+                daily_on_hand_by_cat[cat].append(cat_on_hand)
+                daily_spoilage_by_cat[cat].append(cat_spoilage)
+
             daily_proc_cost.append(proc)
             daily_hold_cost.append(hold)
             daily_penalty_cost.append(pen)
@@ -325,10 +398,14 @@ class Benchmarker:
         overall["total_cost_raw"] = raw_total_cost
         overall["spoilage_rate"] = float(sum(daily_spoilage_units) / max(sum(daily_demand), 1e-9))
 
+        per_category = self._compute_per_category_metrics(
+            daily_demand_by_cat, daily_fulfilled_by_cat, daily_on_hand_by_cat, daily_spoilage_by_cat
+        )
+
         return BenchmarkResult(
             policy_name="Baseline 1 (ROP–EOQ)",
             overall=overall,
-            per_category=self._per_category_stub(),
+            per_category=per_category,
             timeseries={
                 "demand": np.array(daily_demand),
                 "fulfilled": np.array(daily_fulfilled),
@@ -347,6 +424,12 @@ class Benchmarker:
         daily_proc_cost, daily_hold_cost, daily_penalty_cost, daily_spoilage_cost = [], [], [], []
         daily_spoilage_units = []
         procurement_volumes: dict[str, dict[str, float]] = {c: {} for c in self._categories}
+
+        # Per-category tracking
+        daily_demand_by_cat: dict[str, list[float]] = {cat: [] for cat in self._categories}
+        daily_fulfilled_by_cat: dict[str, list[float]] = {cat: [] for cat in self._categories}
+        daily_on_hand_by_cat: dict[str, list[float]] = {cat: [] for cat in self._categories}
+        daily_spoilage_by_cat: dict[str, list[float]] = {cat: [] for cat in self._categories}
 
         for day in range(self._test_days):
             snap = env.get_inventory_snapshot()
@@ -385,6 +468,35 @@ class Benchmarker:
             daily_demand.append(day_demand)
             daily_fulfilled.append(day_fulfilled)
             daily_on_hand.append(sum(r.get("on_hand", 0.0) for r in snap.values()))
+
+            # Compute per-category metrics
+            for cat in self._categories:
+                cat_demand = sum(
+                    rec.get("last_demand", 0.0)
+                    for sku, rec in snap.items()
+                    if rec.get("category") == cat
+                )
+                cat_fulfilled = sum(
+                    rec.get("last_fulfilled", 0.0)
+                    for sku, rec in snap.items()
+                    if rec.get("category") == cat
+                )
+                cat_on_hand = sum(
+                    rec.get("on_hand", 0.0)
+                    for sku, rec in snap.items()
+                    if rec.get("category") == cat
+                )
+                cat_spoilage = sum(
+                    rec.get("last_expired", 0.0)
+                    for sku, rec in snap.items()
+                    if rec.get("category") == cat
+                )
+
+                daily_demand_by_cat[cat].append(cat_demand)
+                daily_fulfilled_by_cat[cat].append(cat_fulfilled)
+                daily_on_hand_by_cat[cat].append(cat_on_hand)
+                daily_spoilage_by_cat[cat].append(cat_spoilage)
+
             daily_proc_cost.append(proc)
             daily_hold_cost.append(hold)
             daily_penalty_cost.append(pen)
@@ -411,10 +523,14 @@ class Benchmarker:
         overall["total_cost_raw"] = raw_total_cost
         overall["spoilage_rate"] = float(sum(daily_spoilage_units) / max(sum(daily_demand), 1e-9))
 
+        per_category = self._compute_per_category_metrics(
+            daily_demand_by_cat, daily_fulfilled_by_cat, daily_on_hand_by_cat, daily_spoilage_by_cat
+        )
+
         return BenchmarkResult(
             policy_name="Baseline 2 (ML + Static)",
             overall=overall,
-            per_category=self._per_category_stub(),
+            per_category=per_category,
             timeseries={
                 "demand": np.array(daily_demand),
                 "fulfilled": np.array(daily_fulfilled),
@@ -425,6 +541,53 @@ class Benchmarker:
     def _per_category_stub(self) -> dict[str, dict[str, float]]:
         """Return per-category metric stubs (populated by post-processing)."""
         return {cat: {} for cat in self._categories}
+
+    def _compute_per_category_metrics(
+        self,
+        daily_demand_by_cat: dict[str, list[float]],
+        daily_fulfilled_by_cat: dict[str, list[float]],
+        daily_on_hand_by_cat: dict[str, list[float]],
+        daily_spoilage_by_cat: dict[str, list[float]],
+    ) -> dict[str, dict[str, float]]:
+        """Compute per-category metrics from daily category-specific data.
+
+        Args:
+            daily_demand_by_cat: {category: [daily_demand, ...]}
+            daily_fulfilled_by_cat: {category: [daily_fulfilled, ...]}
+            daily_on_hand_by_cat: {category: [daily_on_hand, ...]}
+            daily_spoilage_by_cat: {category: [daily_spoilage_units, ...]}
+
+        Returns:
+            {category: {metric_name: value, ...}}
+        """
+        from aairm.evaluation.metrics import (
+            average_inventory_ratio,
+            fill_rate,
+            stockout_rate,
+        )
+        from aairm.evaluation.metrics import (
+            spoilage_rate as compute_spoilage_rate,
+        )
+
+        per_cat: dict[str, dict[str, float]] = {}
+        for cat in self._categories:
+            if cat not in daily_demand_by_cat or len(daily_demand_by_cat[cat]) == 0:
+                per_cat[cat] = {}
+                continue
+
+            demand = daily_demand_by_cat[cat]
+            fulfilled = daily_fulfilled_by_cat[cat]
+            on_hand = daily_on_hand_by_cat[cat]
+            spoilage = daily_spoilage_by_cat[cat]
+
+            per_cat[cat] = {
+                "stockout_rate": float(stockout_rate(demand, fulfilled)),
+                "fill_rate": float(fill_rate(demand, fulfilled)),
+                "avg_inventory": float(average_inventory_ratio(on_hand, demand)),
+                "spoilage_rate": float(compute_spoilage_rate(demand, spoilage)),
+            }
+
+        return per_cat
 
     def _assert_results(self, results: dict[str, BenchmarkResult]) -> None:
         """Assert AAIRM results are within TOLERANCE of paper values."""

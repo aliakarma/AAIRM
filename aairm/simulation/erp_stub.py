@@ -276,13 +276,38 @@ class ERPStub:
             rec = self._catalog[sku_id]
             expired = 0.0
             if rec.is_perishable and rec.shelf_life_days is not None and state["on_hand"] > 0:
-                base_expiry_frac = 1.0 / max(float(rec.shelf_life_days), 1.0)
-                stochastic = float(self._rng.uniform(0.7, 1.3))
-                expired = min(
-                    state["on_hand"],
-                    state["on_hand"] * base_expiry_frac * stochastic * self._expiry_rate_multiplier,
-                )
-                state["on_hand"] = max(0.0, state["on_hand"] - expired)
+                # Category-specific shelf life adjustments
+                category_shelf_life_multipliers = {
+                    "frozen_food": 2.0,  # Frozen food lasts longer
+                    "apparel": float("inf"),  # Apparel doesn't expire
+                    "dry_fruits": 1.0,  # Standard expiry
+                    "cosmetics": 1.0,  # Standard expiry
+                    "grocery": 1.0,  # Standard expiry
+                }
+                shelf_life_mult = category_shelf_life_multipliers.get(rec.category, 1.0)
+
+                # Category-specific expiry rate multipliers
+                category_expiry_multipliers = {
+                    "frozen_food": 0.5,  # Lowest spoilage
+                    "apparel": 0.0,  # No spoilage
+                    "dry_fruits": 1.5,  # Highest spoilage
+                    "cosmetics": 1.0,  # Standard
+                    "grocery": 1.0,  # Standard
+                }
+                expiry_mult = category_expiry_multipliers.get(rec.category, 1.0)
+
+                if shelf_life_mult != float("inf"):
+                    base_expiry_frac = 1.0 / max(float(rec.shelf_life_days) * shelf_life_mult, 1.0)
+                    stochastic = float(self._rng.uniform(0.7, 1.3))
+                    expired = min(
+                        state["on_hand"],
+                        state["on_hand"]
+                        * base_expiry_frac
+                        * stochastic
+                        * self._expiry_rate_multiplier
+                        * expiry_mult,
+                    )
+                    state["on_hand"] = max(0.0, state["on_hand"] - expired)
 
             state["last_demand"] = float(demand)
             state["last_fulfilled"] = float(fulfilled)
