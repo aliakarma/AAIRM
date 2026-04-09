@@ -1,19 +1,58 @@
 # AAIRM
 
-> Agentic AI Inventory Replenishment and Management for multi-category retail inventory optimization.
+<p align="center">
+  <strong>Agentic AI Inventory Replenishment and Management</strong><br>
+  Multi-category retail inventory optimization with coordinated agentic decision-making.
+</p>
 
-AAIRM is a research-oriented inventory intelligence framework that combines forecasting, replenishment optimization, supplier-aware execution, and governance checks in one agentic workflow. The repository includes reproducible benchmark pipelines, validated multi-category experiments, and publication-ready result artifacts.
+<p align="center">
+  <a href="https://github.com/aliakarma/AAIRM"><img alt="Repo" src="https://img.shields.io/badge/repository-AAIRM-0A66C2"></a>
+  <a href="https://opensource.org/licenses/MIT"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-2ea44f"></a>
+  <img alt="Python" src="https://img.shields.io/badge/python-3.10%2B-3776AB">
+  <a href="https://aliakarma.github.io/AAIRM"><img alt="Docs" src="https://img.shields.io/badge/docs-MkDocs-0ea5e9"></a>
+</p>
 
----
+AAIRM is a research-oriented framework that combines demand forecasting, replenishment optimization, supplier-aware execution, and governance controls in one end-to-end workflow. It is designed for reproducible benchmarking, multi-category experimentation, and publication-ready analysis.
 
-## 🚀 Key Contributions
+## 📚 Index
 
-- **Agentic inventory optimization:** Coordinated decision flow across perception, conceptualization, and action layers.
-- **Multi-category modeling:** Unified simulation over grocery, frozen_food, apparel, cosmetics, and dry_fruits.
-- **Cost vs service trade-off learning:** AAIRM improves normalized total cost while maintaining competitive fill performance under realistic constraints.
-- **Scalability validation:** Controlled scaling from 100 SKU to 500 SKU settings with consistent evaluation protocol.
+- [✨ Highlights](#-highlights)
+- [🏗️ System Overview](#️-system-overview)
+- [📊 Results Summary](#-results-summary)
+- [🧠 Multi-Category Behavior](#-multi-category-behavior)
+- [🛠️ Installation](#️-installation)
+- [🚀 Quickstart](#-quickstart)
+- [🧪 Reproducibility & Experiments](#-reproducibility--experiments)
+- [🧰 Development Commands](#-development-commands)
+- [📁 Repository Structure](#-repository-structure)
+- [📖 Documentation](#-documentation)
+- [🤝 Contributing](#-contributing)
+- [📌 Citation](#-citation)
+- [📜 License](#-license)
 
----
+## ✨ Highlights
+
+- 🤖 **Agentic inventory optimization**: coordinated perception, conceptualization, and action layers.
+- 🛒 **Multi-category setting**: unified simulation over grocery, frozen_food, apparel, cosmetics, and dry_fruits.
+- ⚖️ **Cost-service trade-off learning**: lower normalized cost while maintaining competitive service metrics.
+- 📈 **Scalability validation**: controlled scaling from 100 SKU to 500 SKU settings with fixed protocols.
+- 🔬 **Research-ready workflow**: reproducible seeds, ablations, benchmark baselines, and structured outputs.
+
+## 🏗️ System Overview
+
+AAIRM organizes decision-making into specialized components:
+
+- **Perception agents**: ingest demand signals, supplier behavior, and environment state.
+- **Conceptualization agents**: produce policy-level decisions (forecasting, constraints, and replenishment intent).
+- **Action agents**: execute procurement and inventory actions through tools and ERP-compatible interfaces.
+- **Governance infrastructure**: audit ledger, health monitoring, and reputation signals to constrain unsafe actions.
+
+Core package layout:
+
+- `aairm/agents/` for multi-agent orchestration and role-specific logic.
+- `aairm/models/` for forecasting and reinforcement learning modules.
+- `aairm/simulation/` for environment, supplier, and demand simulation.
+- `aairm/evaluation/` for benchmark metrics, reporting, and experiment summaries.
 
 ## 📊 Results Summary
 
@@ -29,37 +68,33 @@ Primary experiment output: `experiments/results/main_100sku_10seed/summary.json`
 | Total Cost (normalized) | **0.8679 +/- 0.0141** | 1.0000 +/- 0.0000 | 1.1321 +/- 0.1178 |
 | Spoilage Rate | **0.0456 +/- 0.0041** | 0.0585 +/- 0.0054 | 0.0558 +/- 0.0144 |
 
-**Cost improvement:** AAIRM improves normalized total cost by **~23.3%** vs Baseline2 and **~13.2%** vs Baseline1.
+**Cost improvement**: AAIRM improves normalized total cost by **~23.3%** vs Baseline2 and **~13.2%** vs Baseline1.
 
-### 📈 Scalability (500 SKUs, 5 Seeds, 200 Episodes)
+### Scalability Results (500 SKUs, 5 Seeds, 200 Episodes)
 
-Secondary scalability output: `experiments/results/scalability_500sku_5seed/summary.json`
+Secondary output: `experiments/results/scalability_500sku_5seed/summary.json`
 
-At 500 SKUs, AAIRM still maintains clear cost advantage (0.8292 vs 1.2033 for Baseline2), while service quality degrades in harder high-perishable / volatile segments (especially dry_fruits). This behavior reflects an explicit cost-service trade-off under increased problem scale rather than a pipeline failure, and supports the paper discussion on scaling challenges.
-
----
+At 500 SKUs, AAIRM preserves a clear cost advantage (0.8292 vs 1.2033 for Baseline2). Service quality declines in harder high-perishable and volatile segments (notably dry_fruits), reflecting an explicit cost-service trade-off under higher scale rather than a pipeline failure.
 
 ## 🧠 Multi-Category Behavior
 
 AAIRM is evaluated on five balanced retail categories:
 
-- **grocery**
-- **frozen_food**
-- **apparel**
-- **cosmetics**
-- **dry_fruits**
+- grocery
+- frozen_food
+- apparel
+- cosmetics
+- dry_fruits
 
-Key observations:
+Observed behavior:
 
-- **Perishability differences:** apparel has near-zero spoilage, frozen_food remains below dry_fruits spoilage, and dry_fruits consistently shows highest spoilage pressure.
-- **Demand heterogeneity:** demand and service behavior differ by category, reflecting category-level dynamics.
-- **Policy adaptation:** AAIRM adapts inventory posture by category, reducing aggregate holding burden while controlling overall cost.
+- **Perishability gradient**: apparel shows near-zero spoilage; dry_fruits has consistently higher spoilage pressure.
+- **Demand heterogeneity**: category-specific dynamics induce different service and inventory patterns.
+- **Adaptive policy posture**: decisions vary by category to reduce aggregate holding burden while controlling total cost.
 
----
+## 🛠️ Installation
 
-## ⚙️ How to Run
-
-### 🔹 Environment Setup
+### Option A: Minimal runtime setup
 
 ```powershell
 python -m venv .venv
@@ -67,7 +102,28 @@ python -m venv .venv
 pip install -r requirements.txt
 ```
 
-### 🔹 Run Main Experiment (100 SKUs)
+### Option B: Editable package install
+
+```powershell
+python -m venv .venv
+.\.venv\Scripts\activate
+pip install -e .
+```
+
+### Option C: Full development environment
+
+```powershell
+python -m venv .venv
+.\.venv\Scripts\activate
+pip install -e ".[dev]"
+pre-commit install
+```
+
+Python 3.10+ is required.
+
+## 🚀 Quickstart
+
+### Run main experiment (100 SKUs)
 
 ```powershell
 python scripts/run_smoke_multiseed.py `
@@ -77,7 +133,7 @@ python scripts/run_smoke_multiseed.py `
   --out-dir experiments/results/main_100sku_10seed
 ```
 
-### 🔹 Run Scalability Experiment (500 SKUs)
+### Run scalability experiment (500 SKUs)
 
 ```powershell
 python scripts/run_smoke_multiseed.py `
@@ -87,28 +143,70 @@ python scripts/run_smoke_multiseed.py `
   --out-dir experiments/results/scalability_500sku_5seed
 ```
 
----
+## 🧪 Reproducibility & Experiments
 
-## 📁 Project Structure
+- Fixed seeds are used for benchmark consistency.
+- Baselines include ROP-EOQ and ML+Static policies.
+- Reproduction and ablation scripts are provided under `experiments/` and `scripts/`.
+
+Useful entry points:
+
+- `experiments/run_paper_experiment.py`
+- `experiments/run_ablation.py`
+- `experiments/run_realworld.py`
+- `scripts/run_smoke_multiseed.py`
+
+## 🧰 Development Commands
+
+If you use Make, common targets include:
+
+```powershell
+make install-dev
+make lint
+make format
+make typecheck
+make test-fast
+make docs
+```
+
+On Windows without Make, run equivalent commands directly (ruff, black, mypy, pytest, mkdocs).
+
+## 📁 Repository Structure
 
 ```text
-aairm/
-configs/
-scripts/
-experiments/results/
+aairm/                  # Core framework (agents, models, simulation, evaluation, tools)
+configs/                # Experiment and dataset configuration files
+scripts/                # Automation scripts (data prep, smoke runs, exports)
+experiments/            # Paper reproduction and ablation runners
+docs/                   # MkDocs documentation source
+tests/                  # Unit, integration, and smoke tests
 README.md
 ```
 
----
+## 📖 Documentation
 
-## 📌 Notes
+- Project docs: https://aliakarma.github.io/AAIRM
+- Local docs server:
 
-- Results are reproducible via fixed seeds.
-- Simulations use a multi-category retail setup.
-- Repository is prepared for research and publication workflows.
+```powershell
+mkdocs serve
+```
 
----
+## 🤝 Contributing
+
+Contributions are welcome.
+
+1. Fork the repository.
+2. Create a feature branch.
+3. Run linting/tests locally.
+4. Open a pull request with a clear change summary.
+
+Please review `CONTRIBUTING.md` and `CODE_OF_CONDUCT.md` before submitting changes.
+
+## 📌 Citation
+
+If you use AAIRM in academic or industrial research, please cite using the metadata in `CITATION.cff`.
 
 ## 📜 License
 
-This project is licensed under the MIT License. See the `LICENSE` file for details.
+This project is licensed under the MIT License. See `LICENSE` for details.
