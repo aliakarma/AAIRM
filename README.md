@@ -16,19 +16,21 @@ AAIRM is a research-oriented framework that combines demand forecasting, repleni
 
 ## 📚 Index
 
-- [✨ Highlights](#-highlights)
-- [🏗️ System Overview](#️-system-overview)
-- [📊 Results Summary](#-results-summary)
-- [🧠 Multi-Category Behavior](#-multi-category-behavior)
-- [🛠️ Installation](#️-installation)
-- [🚀 Quickstart](#-quickstart)
-- [🧪 Reproducibility & Experiments](#-reproducibility--experiments)
-- [🧰 Development Commands](#-development-commands)
-- [📁 Repository Structure](#-repository-structure)
-- [📖 Documentation](#-documentation)
-- [🤝 Contributing](#-contributing)
-- [📌 Citation](#-citation)
-- [📜 License](#-license)
+- [✨ Highlights](#highlights)
+- [🏗️ System Overview](#system-overview)
+- [📊 Results Summary](#results-summary)
+- [🧠 Multi-Category Behavior](#multi-category-behavior)
+- [🛠️ Installation](#installation)
+- [🚀 Quickstart](#quickstart)
+- [🧪 Reproducibility & Experiments](#reproducibility-experiments)
+- [🧰 Development Commands](#development-commands)
+- [📁 Repository Structure](#repository-structure)
+- [📖 Documentation](#documentation)
+- [🤝 Contributing](#contributing)
+- [📌 Citation](#citation)
+- [📜 License](#license)
+
+<a id="highlights"></a>
 
 ## ✨ Highlights
 
@@ -37,6 +39,8 @@ AAIRM is a research-oriented framework that combines demand forecasting, repleni
 - ⚖️ **Cost-service trade-off learning**: lower normalized cost while maintaining competitive service metrics.
 - 📈 **Scalability validation**: controlled scaling from 100 SKU to 500 SKU settings with fixed protocols.
 - 🔬 **Research-ready workflow**: reproducible seeds, ablations, benchmark baselines, and structured outputs.
+
+<a id="system-overview"></a>
 
 ## 🏗️ System Overview
 
@@ -53,6 +57,8 @@ Core package layout:
 - `aairm/models/` for forecasting and reinforcement learning modules.
 - `aairm/simulation/` for environment, supplier, and demand simulation.
 - `aairm/evaluation/` for benchmark metrics, reporting, and experiment summaries.
+
+<a id="results-summary"></a>
 
 ## 📊 Results Summary
 
@@ -76,6 +82,8 @@ Secondary output: `experiments/results/scalability_500sku_5seed/summary.json`
 
 At 500 SKUs, AAIRM preserves a clear cost advantage (0.8292 vs 1.2033 for Baseline2). Service quality declines in harder high-perishable and volatile segments (notably dry_fruits), reflecting an explicit cost-service trade-off under higher scale rather than a pipeline failure.
 
+<a id="multi-category-behavior"></a>
+
 ## 🧠 Multi-Category Behavior
 
 AAIRM is evaluated on five balanced retail categories:
@@ -91,6 +99,8 @@ Observed behavior:
 - **Perishability gradient**: apparel shows near-zero spoilage; dry_fruits has consistently higher spoilage pressure.
 - **Demand heterogeneity**: category-specific dynamics induce different service and inventory patterns.
 - **Adaptive policy posture**: decisions vary by category to reduce aggregate holding burden while controlling total cost.
+
+<a id="installation"></a>
 
 ## 🛠️ Installation
 
@@ -121,6 +131,8 @@ pre-commit install
 
 Python 3.10+ is required.
 
+<a id="quickstart"></a>
+
 ## 🚀 Quickstart
 
 ### Run main experiment (100 SKUs)
@@ -143,6 +155,8 @@ python scripts/run_smoke_multiseed.py `
   --out-dir experiments/results/scalability_500sku_5seed
 ```
 
+<a id="reproducibility-experiments"></a>
+
 ## 🧪 Reproducibility & Experiments
 
 - Fixed seeds are used for benchmark consistency.
@@ -155,6 +169,8 @@ Useful entry points:
 - `experiments/run_ablation.py`
 - `experiments/run_realworld.py`
 - `scripts/run_smoke_multiseed.py`
+
+<a id="development-commands"></a>
 
 ## 🧰 Development Commands
 
@@ -171,6 +187,8 @@ make docs
 
 On Windows without Make, run equivalent commands directly (ruff, black, mypy, pytest, mkdocs).
 
+<a id="repository-structure"></a>
+
 ## 📁 Repository Structure
 
 ```text
@@ -183,6 +201,8 @@ tests/                  # Unit, integration, and smoke tests
 README.md
 ```
 
+<a id="documentation"></a>
+
 ## 📖 Documentation
 
 - Project docs: https://aliakarma.github.io/AAIRM
@@ -191,6 +211,8 @@ README.md
 ```powershell
 mkdocs serve
 ```
+
+<a id="contributing"></a>
 
 ## 🤝 Contributing
 
@@ -203,9 +225,13 @@ Contributions are welcome.
 
 Please review `CONTRIBUTING.md` and `CODE_OF_CONDUCT.md` before submitting changes.
 
+<a id="citation"></a>
+
 ## 📌 Citation
 
 If you use AAIRM in academic or industrial research, please cite using the metadata in `CITATION.cff`.
+
+<a id="license"></a>
 
 ## 📜 License
 
