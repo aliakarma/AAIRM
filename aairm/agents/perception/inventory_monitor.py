@@ -80,6 +80,12 @@ class InventoryMonitorAgent(BaseAgent):
             self._log_end(state, t0, low_stock=0)
             return state
 
+        self._log.info(
+            "inventory.snapshot_state",
+            n_skus_total=len(snapshot),
+            sample_skus=list(snapshot.keys())[:5],
+        )
+
         low_stock: list[str] = []
 
         for sku_id, rec in snapshot.items():

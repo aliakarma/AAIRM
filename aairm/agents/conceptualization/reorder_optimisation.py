@@ -73,7 +73,14 @@ class ReorderOptimisationAgent(BaseAgent):
         Returns:
             Updated state.
         """
-        t0 = self._log_start(state, mode=self._mode)
+        t0 = self._log_start(state, mode=self._mode, n_low_stock=len(state.low_stock_skus))
+        if not state.low_stock_skus:
+            self._log.warning(
+                "optimisation.no_low_stock",
+                day=state.day,
+                mode=self._mode,
+                note="No low-stock SKUs available for optimisation this cycle.",
+            )
         proposals: dict[str, float] = {}
         budget_used: float = 0.0
 
@@ -98,6 +105,17 @@ class ReorderOptimisationAgent(BaseAgent):
                 spoilage_rate = unit_cost * 0.5
 
             budget_remaining = self._budget - budget_used
+            self._log.debug(
+                "optimisation.input_state",
+                sku_id=sku_id,
+                effective_available=float(rec.get("effective_available", 0.0)),
+                demand_mean=demand_mean,
+                demand_std=demand_std,
+                days_to_expiry=days_to_expiry,
+                budget_remaining=round(budget_remaining, 2),
+                unit_cost=unit_cost,
+                unit_volume=unit_volume,
+            )
 
             if self._mode == "rl" and self._policy is not None:
                 obs = np.array(

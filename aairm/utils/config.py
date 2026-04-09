@@ -281,3 +281,5 @@ class AAIRMConfig(BaseSettings):
         description="Directory for writing experiment outputs.")
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR"] = Field("INFO")
     log_format: Literal["console", "json"] = Field("console")
+    fast_dev_run: bool = Field(False,
+        description="Enable fast development mode with reduced training and logging.")

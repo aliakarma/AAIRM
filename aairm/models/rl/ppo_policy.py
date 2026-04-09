@@ -132,10 +132,10 @@ class PPOPolicy:
             Tuple of ``(action, state)`` matching the SB3 interface.
             ``action[0]`` is the predicted order quantity Q*.
         """
-        if self._model is None or not self._trained:
-            # Fallback: analytical default (10% of budget / unit_cost proxy)
-            q_default = np.array([50.0], dtype=np.float32)
-            return q_default, None
+        if self._model is None:
+            raise RuntimeError("PPO model not built. Call build() first.")
+        if not self._trained:
+            raise RuntimeError("PPO policy not trained. Call train() first.")
 
         try:
             action, state = self._model.predict(obs, deterministic=deterministic)

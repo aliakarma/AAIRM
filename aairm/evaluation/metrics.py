@@ -272,10 +272,16 @@ def compute_all_metrics(
     holding_costs: ArrayLike,
     penalty_costs: ArrayLike,
     spoilage_costs: ArrayLike,
+    spoilage_units: ArrayLike,
     baseline_total_cost: float,
     procurement_volumes: dict[str, dict[str, float]],
 ) -> dict[str, float]:
     """Compute all five paper metrics and return as a dict.
+
+    IMPORTANT: Spoilage is NOT double-counted.  The ``spoilage_costs`` array
+    is used only for the ``total_cost`` calculation (monetary).  The
+    ``spoilage_units`` array is used only for the ``spoilage_rate`` calculation
+    (units as a fraction of demand).  These are separate, independent metrics.
 
     Args:
         demand: Daily demand array.
@@ -284,13 +290,16 @@ def compute_all_metrics(
         procurement_costs: Daily procurement cost array.
         holding_costs: Daily holding cost array.
         penalty_costs: Daily penalty cost array.
-        spoilage_costs: Daily spoilage cost array.
+        spoilage_costs: Daily spoilage cost array (for total_cost only).
+        spoilage_units: Daily spoiled units array (for spoilage_rate only).
         baseline_total_cost: Reference cost for normalisation.
         procurement_volumes: ``{category: {supplier_id: volume}}``.
 
     Returns:
         Dict with keys:
         ``{stockout_rate, fill_rate, avg_inventory, total_cost, div_index, spoilage_rate}``.
+        
+        Each key represents a separate, independent metric with no redundancy.
     """
     return {
         "stockout_rate": stockout_rate(demand, fulfilled),
@@ -304,5 +313,5 @@ def compute_all_metrics(
             baseline_total_cost,
         ),
         "div_index": supplier_diversification_index(procurement_volumes),
-        "spoilage_rate": spoilage_rate(demand, spoilage_costs),
+        "spoilage_rate": spoilage_rate(demand, spoilage_units),
     }

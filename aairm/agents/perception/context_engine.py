@@ -127,5 +127,11 @@ class ContextEngine(BaseAgent):
 
         state.context_features = features
         self._record_event(state, "context.assembled", n_skus=len(features))
+        self._log.info(
+            "context.state",
+            low_stock_count=len(state.low_stock_skus),
+            n_features=len(features),
+            sample_skus=list(features.keys())[:5],
+        )
         self._log_end(state, t0, n_skus=len(features))
         return state

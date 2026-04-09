@@ -69,6 +69,12 @@ class DemandForecastingAgent(BaseAgent):
             Updated state.
         """
         t0 = self._log_start(state, n_skus=len(state.low_stock_skus))
+        if not state.low_stock_skus:
+            self._log.warning(
+                "forecasting.no_low_stock",
+                day=state.day,
+                note="No low-stock SKUs available for forecasting this cycle.",
+            )
 
         forecasts: dict[str, dict[str, Any]] = {}
 
@@ -109,6 +115,11 @@ class DemandForecastingAgent(BaseAgent):
             )
 
         state.demand_forecasts = forecasts
+        self._log.info(
+            "forecasting.output",
+            n_forecasts=len(forecasts),
+            sample_skus=list(forecasts.keys())[:5],
+        )
         self._log_end(state, t0, n_forecasts=len(forecasts))
         return state
 
