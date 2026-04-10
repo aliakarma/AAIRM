@@ -135,7 +135,7 @@ class ReorderOptimisationAgent(BaseAgent):
                 unit_volume=unit_volume,
             )
 
-            if self._mode == "rl" and self._policy is not None:
+            if self._mode == "rl" and self._policy is not None and hasattr(self._policy, '_model') and self._policy._model is not None:
                 obs = np.array(
                     [
                         float(rec.get("effective_available", 0.0)),
@@ -157,6 +157,7 @@ class ReorderOptimisationAgent(BaseAgent):
                         shelf_life_demand, budget_remaining, unit_volume,
                     )
             else:
+                # Fallback to analytical if RL not available or not built
                 q_star = self._analytical_q(
                     demand_mean, demand_std, unit_cost,
                     holding_cost, penalty_cost, spoilage_rate,

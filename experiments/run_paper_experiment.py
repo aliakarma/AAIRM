@@ -267,6 +267,7 @@ def run_single_experiment(config: AAIRMConfig, reward_tuning: dict[str, float], 
             verbose=0,
         )
         rl_policy.build(env)
+        logger.info("ppo.model_built", message="PPO model built successfully")
         
         if config.fast_dev_run:
             total_timesteps = 1_000  # Lightweight training for fast iteration
@@ -363,6 +364,18 @@ def aggregate_results(all_results: list[dict[str, BenchmarkResult]]) -> dict[str
     return aggregated
 
 
+def make_json_serializable(obj):
+    """Convert numpy types to native Python types for JSON serialization."""
+    if isinstance(obj, dict):
+        return {k: make_json_serializable(v) for k, v in obj.items()}
+    elif isinstance(obj, list):
+        return [make_json_serializable(v) for v in obj]
+    elif isinstance(obj, np.generic):
+        return obj.item()
+    else:
+        return obj
+
+
 def perform_statistical_comparison(all_results: list[dict[str, BenchmarkResult]], output_dir: Path) -> None:
     """Perform statistical tests between AAIRM and baselines."""
     try:
@@ -398,7 +411,7 @@ def perform_statistical_comparison(all_results: list[dict[str, BenchmarkResult]]
     # Save to file
     import json
     with open(output_dir / "statistical_comparison.json", "w") as f:
-        json.dump(comparison_results, f, indent=2)
+        json.dump(make_json_serializable(comparison_results), f, indent=2)
     
     print("\nStatistical Comparison (AAIRM vs Baselines):")
     for metric, comparisons in comparison_results.items():
@@ -534,6 +547,7 @@ def main() -> None:
             verbose=0,
         )
         rl_policy.build(env)
+        logger.info("ppo.model_built", message="PPO model built successfully")
         
         if config.fast_dev_run:
             total_timesteps = 1_000  # Lightweight training for fast iteration
