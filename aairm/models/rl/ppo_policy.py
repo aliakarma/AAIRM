@@ -109,9 +109,87 @@ class PPOPolicy:
             logger.warning("ppo.train.model_not_built")
             return self
         try:
-            self._model.learn(total_timesteps=total_timesteps)
+            logger.info("ppo.training_started", total_timesteps=total_timesteps)
+            
+            # Create callback for logging
+            from stable_baselines3.common.callbacks import BaseCallback
+            
+            class TrainingCallback(BaseCallback):
+                def __init__(self, verbose=0):
+                    super().__init__(verbose)
+                    self.episode_rewards = []
+                    self.episode_lengths = []
+                    self.current_episode_reward = 0
+                    self.current_episode_length = 0
+                
+                def _on_step(self) -> bool:
+                    # Log step info
+                    reward = self.locals.get('rewards', [0])[0] if 'rewards' in self.locals else 0
+                    done = self.locals.get('dones', [False])[0] if 'dones' in self.locals else False
+                    
+                    self.current_episode_reward += reward
+                    self.current_episode_length += 1
+                    
+                    if done:
+                        self.episode_rewards.append(self.current_episode_reward)
+                        self.episode_lengths.append(self.current_episode_length)
+                        
+                        # Log episode reward
+                        logger.info("ppo.episode_completed", 
+                                  episode=len(self.episode_rewards),
+                                  reward=round(self.current_episode_reward, 2),
+                                  length=self.current_episode_length)
+                        
+                        # Check if rewards are constant (indicates no learning)
+                        if len(self.episode_rewards) >= 5:
+                            recent_rewards = self.episode_rewards[-5:]
+                            if len(set(recent_rewards)) == 1:
+                                logger.warning("ppo.constant_rewards_detected", 
+                                             recent_rewards=recent_rewards,
+                                             message="PPO may not be learning - rewards are constant")
+                        
+                        self.current_episode_reward = 0
+                        self.current_episode_length = 0
+                    
+                    # Log loss if available
+                    if 'loss' in self.locals:
+                        loss = self.locals['loss']
+                        if hasattr(loss, 'item'):
+                            loss_val = loss.item()
+                        else:
+                            loss_val = float(loss)
+                        logger.debug("ppo.training_loss", loss=round(loss_val, 6))
+                    
+                    return True
+                
+                def _on_training_end(self):
+                    # Log final statistics
+                    if self.episode_rewards:
+                        avg_reward = sum(self.episode_rewards) / len(self.episode_rewards)
+                        logger.info("ppo.training_summary", 
+                                  total_episodes=len(self.episode_rewards),
+                                  avg_episode_reward=round(avg_reward, 2),
+                                  min_reward=min(self.episode_rewards),
+                                  max_reward=max(self.episode_rewards))
+                    
+                    # Log action distribution (sample some predictions)
+                    try:
+                        sample_obs = np.random.randn(10, _OBS_DIM).astype(np.float32)
+                        actions, _ = self.model.predict(sample_obs, deterministic=True)
+                        action_stats = {
+                            'mean': round(float(np.mean(actions)), 2),
+                            'std': round(float(np.std(actions)), 2),
+                            'min': round(float(np.min(actions)), 2),
+                            'max': round(float(np.max(actions)), 2)
+                        }
+                        logger.info("ppo.action_distribution", **action_stats)
+                    except Exception as e:
+                        logger.debug("ppo.action_distribution_failed", error=str(e))
+            
+            callback = TrainingCallback()
+            self._model.learn(total_timesteps=total_timesteps, callback=callback)
             self._trained = True
-            logger.info("ppo.trained", total_timesteps=total_timesteps)
+            logger.info("ppo.training_completed", total_timesteps=total_timesteps)
         except Exception as exc:  # noqa: BLE001
             logger.error("ppo.train.failed", error=str(exc))
         return self
