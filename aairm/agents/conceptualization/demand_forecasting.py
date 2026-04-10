@@ -48,12 +48,18 @@ class DemandForecastingAgent(BaseAgent):
         self._horizon: int = config.forecast_horizon
 
     def run(self, state: AgentState) -> AgentState:
-        """Compute demand forecasts for all low-stock SKUs.
+        """Compute demand forecasts for all low-stock and candidate SKUs.
+
+        Ensures forecasts are generated proactively, even when low_stock_skus
+        is empty.  Combines low_stock (priority) and replenishment_candidates
+        (secondary priority) for a complete replenishment view.
 
         Reads
         -----
         state.low_stock_skus
-            SKUs requiring replenishment.
+            High-priority SKUs requiring replenishment.
+        state.replenishment_candidates
+            Secondary-priority candidates identified by soft thresholds.
         state.context_features
             Feature vectors assembled by P4.
 
@@ -68,17 +74,29 @@ class DemandForecastingAgent(BaseAgent):
         Returns:
             Updated state.
         """
-        t0 = self._log_start(state, n_skus=len(state.low_stock_skus))
-        if not state.low_stock_skus:
+        t0 = self._log_start(state, n_low_stock=len(state.low_stock_skus),
+                           n_candidates=len(state.replenishment_candidates))
+
+        # Combine low_stock (high priority) and candidates
+        all_skus = state.low_stock_skus + state.replenishment_candidates
+        # Deduplicate while preserving order
+        seen = set()
+        unique_skus = []
+        for sku_id in all_skus:
+            if sku_id not in seen:
+                seen.add(sku_id)
+                unique_skus.append(sku_id)
+
+        if not unique_skus:
             self._log.warning(
-                "forecasting.no_low_stock",
+                "forecasting.no_candidates",
                 day=state.day,
-                note="No low-stock SKUs available for forecasting this cycle.",
+                note="No low-stock or candidate SKUs available for forecasting.",
             )
 
         forecasts: dict[str, dict[str, Any]] = {}
 
-        for sku_id in state.low_stock_skus:
+        for sku_id in unique_skus:
             ctx = state.context_features.get(sku_id)
             if ctx is None:
                 self._append_error(

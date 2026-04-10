@@ -72,10 +72,18 @@ class ContextEngine(BaseAgent):
         self._context_length = context_length
 
     def run(self, state: AgentState) -> AgentState:
-        """Assemble context feature vectors for all low-stock SKUs.
+        """Assemble context feature vectors for all low-stock and candidate SKUs.
+
+        Processes both:
+        1. ``state.low_stock_skus`` (hard ROP threshold, high priority)
+        2. ``state.replenishment_candidates`` (soft threshold, secondary priority)
+
+        Ensures context features are generated even when low_stock_skus is empty,
+        enabling proactive forecasting and optimization.
 
         Args:
-            state: Pipeline state.  Reads ``state.low_stock_skus`` and
+            state: Pipeline state.  Reads ``state.low_stock_skus``,
+                ``state.replenishment_candidates``, and
                 ``state.sku_inventory_snapshot``.
 
         Returns:
@@ -92,7 +100,18 @@ class ContextEngine(BaseAgent):
         is_weekend = day_of_week >= 5
         is_hol = _is_holiday(day_of_year)
 
-        for sku_id in state.low_stock_skus:
+        # Combine low_stock (high priority) and candidates (secondary priority)
+        # Process low_stock first so they appear first in feature dict
+        all_skus = state.low_stock_skus + state.replenishment_candidates
+        # Deduplicate while preserving order (low_stock > candidates)
+        seen = set()
+        unique_skus = []
+        for sku_id in all_skus:
+            if sku_id not in seen:
+                seen.add(sku_id)
+                unique_skus.append(sku_id)
+
+        for sku_id in unique_skus:
             rec = state.sku_inventory_snapshot.get(sku_id, {})
 
             # Retrieve demand history
@@ -126,10 +145,17 @@ class ContextEngine(BaseAgent):
             }
 
         state.context_features = features
-        self._record_event(state, "context.assembled", n_skus=len(features))
+        self._record_event(
+            state,
+            "context.assembled",
+            n_skus=len(features),
+            n_low_stock=len(state.low_stock_skus),
+            n_candidates=len(state.replenishment_candidates),
+        )
         self._log.info(
             "context.state",
             low_stock_count=len(state.low_stock_skus),
+            candidates_count=len(state.replenishment_candidates),
             n_features=len(features),
             sample_skus=list(features.keys())[:5],
         )
