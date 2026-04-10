@@ -56,11 +56,16 @@ class ReorderOptimisationAgent(BaseAgent):
         self._penalty_mult: float = config.penalty_cost_multiplier
 
     def run(self, state: AgentState) -> AgentState:
-        """Compute optimal order quantities for all low-stock SKUs.
+        """Compute optimal order quantities for all low-stock and candidate SKUs.
+
+        Ensures replenishment proposals are generated proactively by considering
+        both high-priority low-stock SKUs and secondary-priority candidates
+        identified via soft thresholds.
 
         Reads
         -----
-        state.demand_forecasts, state.sku_inventory_snapshot
+        state.low_stock_skus, state.replenishment_candidates, state.demand_forecasts,
+        state.sku_inventory_snapshot
 
         Writes
         ------
@@ -73,11 +78,31 @@ class ReorderOptimisationAgent(BaseAgent):
         Returns:
             Updated state.
         """
-        t0 = self._log_start(state, mode=self._mode)
+        t0 = self._log_start(state, mode=self._mode, n_low_stock=len(state.low_stock_skus),
+                           n_candidates=len(state.replenishment_candidates))
+
+        # Combine low_stock (high priority) and candidates
+        all_skus = state.low_stock_skus + state.replenishment_candidates
+        # Deduplicate while preserving order
+        seen = set()
+        unique_skus = []
+        for sku_id in all_skus:
+            if sku_id not in seen:
+                seen.add(sku_id)
+                unique_skus.append(sku_id)
+
+        if not unique_skus:
+            self._log.warning(
+                "optimisation.no_candidates",
+                day=state.day,
+                mode=self._mode,
+                note="No low-stock or candidate SKUs available for optimisation.",
+            )
+
         proposals: dict[str, float] = {}
         budget_used: float = 0.0
 
-        for sku_id in state.low_stock_skus:
+        for sku_id in unique_skus:
             rec = state.sku_inventory_snapshot.get(sku_id, {})
             fc = state.demand_forecasts.get(sku_id, {})
 
@@ -98,8 +123,19 @@ class ReorderOptimisationAgent(BaseAgent):
                 spoilage_rate = unit_cost * 0.5
 
             budget_remaining = self._budget - budget_used
+            self._log.debug(
+                "optimisation.input_state",
+                sku_id=sku_id,
+                effective_available=float(rec.get("effective_available", 0.0)),
+                demand_mean=demand_mean,
+                demand_std=demand_std,
+                days_to_expiry=days_to_expiry,
+                budget_remaining=round(budget_remaining, 2),
+                unit_cost=unit_cost,
+                unit_volume=unit_volume,
+            )
 
-            if self._mode == "rl" and self._policy is not None:
+            if self._mode == "rl" and self._policy is not None and hasattr(self._policy, '_model') and self._policy._model is not None:
                 obs = np.array(
                     [
                         float(rec.get("effective_available", 0.0)),
@@ -121,6 +157,7 @@ class ReorderOptimisationAgent(BaseAgent):
                         shelf_life_demand, budget_remaining, unit_volume,
                     )
             else:
+                # Fallback to analytical if RL not available or not built
                 q_star = self._analytical_q(
                     demand_mean, demand_std, unit_cost,
                     holding_cost, penalty_cost, spoilage_rate,

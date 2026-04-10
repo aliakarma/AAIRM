@@ -97,7 +97,7 @@ class LearningAgent(BaseAgent):
         # 4. Update RL policy if buffer has enough transitions
         if self._policy is not None and len(self._transitions) >= 64:
             try:
-                self._policy.learn(total_timesteps=len(self._transitions))
+                self._policy.train(total_timesteps=len(self._transitions))
                 self._transitions.clear()
                 self._save_checkpoint(state.day)
             except Exception as exc:  # noqa: BLE001

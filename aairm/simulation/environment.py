@@ -148,6 +148,12 @@ class RetailEnv:
 
         obs = self._get_obs()
         info = {"day": 0, "n_skus": len(self._catalog.sku_ids)}  # type: ignore[union-attr]
+        logger.info(
+            "environment.reset",
+            seed=effective_seed,
+            n_skus=len(self._catalog.sku_ids),
+            initial_inventory_days=self._initial_inv_days,
+        )
         return obs, info
 
     def step(self, action: np.ndarray) -> tuple[np.ndarray, float, bool, bool, dict[str, Any]]:

@@ -57,6 +57,10 @@ class AgentState:
     -------------------------------------
     low_stock_skus : list[str]
         SKU IDs below their reorder-point threshold (populated by P1).
+        Priority candidates; processed first by downstream agents.
+    replenishment_candidates : list[str]
+        SKU IDs where effective_available < lead_time_days * forecast_demand.
+        Secondary candidates identified via soft thresholds (populated by P1).
     sku_inventory_snapshot : dict[str, dict]
         Per-SKU inventory record:
         ``{on_hand, reserved, in_transit, effective_available,
@@ -108,6 +112,7 @@ class AgentState:
 
     # --- perception ---
     low_stock_skus: list[str] = field(default_factory=list)
+    replenishment_candidates: list[str] = field(default_factory=list)
     sku_inventory_snapshot: dict[str, dict[str, Any]] = field(default_factory=dict)
     trend_signals: list[dict[str, Any]] = field(default_factory=list)
     new_sku_candidates: list[dict[str, Any]] = field(default_factory=list)

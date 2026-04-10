@@ -22,7 +22,7 @@ from pathlib import Path
 
 import numpy as np
 
-from aairm.evaluation.benchmarker import PAPER_RESULTS, BenchmarkResult
+from aairm.evaluation.benchmarker import BenchmarkResult
 from aairm.utils.logging import get_logger
 
 logger = get_logger(__name__)
@@ -294,11 +294,7 @@ class Reporter:
 
         # Normalise to baseline1 values
         bl1_vals = {
-            m: (
-                self._results["baseline1"].overall.get(m, 1.0)
-                if "baseline1" in self._results
-                else PAPER_RESULTS["baseline1"].get(m, 1.0)
-            )
+            m: self._results["baseline1"].overall.get(m, 1.0)
             for m in metrics
         }
 
@@ -310,7 +306,7 @@ class Reporter:
         for i, policy in enumerate(policies):
             res = self._results.get(policy)
             if res is None:
-                vals = [PAPER_RESULTS.get(policy, {}).get(m, 0.0) for m in metrics]
+                vals = [0.0 for m in metrics]  # Default to 0 if no result
             else:
                 vals = [res.overall.get(m, 0.0) for m in metrics]
 

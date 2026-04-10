@@ -55,7 +55,14 @@ class InventoryMonitorAgent(BaseAgent):
     # ------------------------------------------------------------------
 
     def run(self, state: AgentState) -> AgentState:
-        """Query inventory state and populate ``state.low_stock_skus``.
+        """Query inventory state and populate ``state.low_stock_skus`` and
+        ``state.replenishment_candidates``.
+
+        Identifies two categories of SKUs requiring attention:
+        1. **low_stock_skus**: effective_available <= ROP (hard threshold).
+           High priority; processed first by downstream agents.
+        2. **replenishment_candidates**: effective_available < lead_time * demand.
+           Secondary priority; soft threshold to enable proactive replenishment.
 
         Args:
             state: Current pipeline state.  ``state.day`` must be set by
@@ -64,6 +71,7 @@ class InventoryMonitorAgent(BaseAgent):
         Returns:
             Updated state with:
             - ``state.low_stock_skus`` — list of SKU IDs needing replenishment.
+            - ``state.replenishment_candidates`` — proactive candidates.
             - ``state.sku_inventory_snapshot`` — full per-SKU inventory dict.
         """
         t0 = self._log_start(state)
@@ -80,7 +88,14 @@ class InventoryMonitorAgent(BaseAgent):
             self._log_end(state, t0, low_stock=0)
             return state
 
+        self._log.info(
+            "inventory.snapshot_state",
+            n_skus_total=len(snapshot),
+            sample_skus=list(snapshot.keys())[:5],
+        )
+
         low_stock: list[str] = []
+        replenishment_candidates: list[str] = []
 
         for sku_id, rec in snapshot.items():
             on_hand: float = float(rec.get("on_hand", 0.0))
@@ -103,24 +118,52 @@ class InventoryMonitorAgent(BaseAgent):
             is_low = effective <= reorder_point
             is_overstock = effective > self._overstock_mult * reorder_point
 
+            # Soft threshold: SKUs where effective inventory < lead-time demand
+            lead_time_demand = lead_time * mu_d
+            is_candidate = effective < lead_time_demand
+
             # Enrich the snapshot record with derived fields
             rec["effective_available"] = round(effective, 2)
             rec["reorder_point"] = round(reorder_point, 2)
             rec["safety_stock"] = round(safety, 2)
             rec["is_low_stock"] = is_low
             rec["is_overstock"] = is_overstock
+            rec["lead_time_demand"] = round(lead_time_demand, 2)
+            rec["is_candidate"] = is_candidate
 
             if is_low:
                 low_stock.append(sku_id)
+            elif is_candidate:
+                # Only add to candidates if not already in low_stock
+                replenishment_candidates.append(sku_id)
 
         state.sku_inventory_snapshot = snapshot
         state.low_stock_skus = low_stock
+        state.replenishment_candidates = replenishment_candidates
+
+        # Proactive fallback: ensure candidates always exist for forecasting/optimization.
+        # If both low_stock and candidates are empty, sample diverse SKUs randomly
+        # to keep the system active and ensure forecasts are generated.
+        if not low_stock and not replenishment_candidates:
+            # Proactively select a diverse set of SKUs (up to 10% of catalog)
+            n_to_select = max(1, len(snapshot) // 10)
+            candidate_ids = list(snapshot.keys())
+            sample = candidate_ids[::max(1, len(candidate_ids) // n_to_select)][:n_to_select]
+            replenishment_candidates = sample
+            self._log.info(
+                "inventory.proactive_sample",
+                n_candidates=len(replenishment_candidates),
+                reason="no_low_stock_or_candidates"
+            )
+
+        state.replenishment_candidates = replenishment_candidates
 
         self._record_event(
             state,
             "inventory.snapshot",
             n_skus_total=len(snapshot),
             n_low_stock=len(low_stock),
+            n_replenishment_candidates=len(replenishment_candidates),
         )
-        self._log_end(state, t0, low_stock=len(low_stock))
+        self._log_end(state, t0, low_stock=len(low_stock), candidates=len(replenishment_candidates))
         return state
