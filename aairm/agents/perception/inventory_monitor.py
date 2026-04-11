@@ -130,7 +130,7 @@ class InventoryMonitorAgent(BaseAgent):
             if is_low:
                 low_stock.append(sku_id)
 
-        if self._config.full_coverage:
+        if self.config.full_coverage:
             replenishment_candidates = all_skus
         elif low_stock:
             replenishment_candidates = low_stock.copy()
@@ -143,7 +143,7 @@ class InventoryMonitorAgent(BaseAgent):
             total_skus=len(all_skus),
             candidates=len(replenishment_candidates),
             low_stock=len(low_stock),
-            full_coverage=self._config.full_coverage,
+            full_coverage=self.config.full_coverage,
         )
 
         state.sku_inventory_snapshot = snapshot
