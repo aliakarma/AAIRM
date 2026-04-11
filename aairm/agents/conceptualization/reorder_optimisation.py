@@ -48,7 +48,8 @@ class ReorderOptimisationAgent(BaseAgent):
         rl_policy: Any = None,
     ) -> None:
         super().__init__("C2", config)
-        self._mode: str = config.mode
+        self._original_mode: str = config.mode
+        self._mode: str = "analytical"
         self._policy = rl_policy
         self._budget: float = config.budget
         self._capacity: float = config.warehouse_capacity
@@ -80,6 +81,12 @@ class ReorderOptimisationAgent(BaseAgent):
         """
         t0 = self._log_start(state, mode=self._mode, n_low_stock=len(state.low_stock_skus),
                            n_candidates=len(state.replenishment_candidates))
+        if self._original_mode != self._mode:
+            self._log.info(
+                "mode.override",
+                message="RL disabled, using analytical policy",
+                original_mode=self._original_mode,
+            )
 
         # Combine low_stock (high priority) and candidates
         all_skus = state.low_stock_skus + state.replenishment_candidates
@@ -112,6 +119,7 @@ class ReorderOptimisationAgent(BaseAgent):
             unit_volume = float(rec.get("unit_volume", 0.05))
             penalty_cost = unit_cost * self._penalty_mult
             holding_cost = unit_cost * self._h_rate
+            lead_time = float(rec.get("lead_time_days", 5.0))
 
             # Perishability
             days_to_expiry = float(rec.get("days_to_expiry", 9999.0))
@@ -135,34 +143,13 @@ class ReorderOptimisationAgent(BaseAgent):
                 unit_volume=unit_volume,
             )
 
-            if self._mode == "rl" and self._policy is not None and hasattr(self._policy, '_model') and self._policy._model is not None:
-                obs = np.array(
-                    [
-                        float(rec.get("effective_available", 0.0)),
-                        demand_mean,
-                        demand_std,
-                        days_to_expiry if days_to_expiry < 9000 else 365.0,
-                        budget_remaining / self._budget,  # normalised
-                    ],
-                    dtype=np.float32,
-                )
-                try:
-                    action, _ = self._policy.predict(obs, deterministic=True)
-                    q_star = float(np.clip(action[0], 0.0, 1e6))
-                except Exception as exc:  # noqa: BLE001
-                    self._append_error(state, f"RL policy failed for {sku_id}: {exc}")
-                    q_star = self._analytical_q(
-                        demand_mean, demand_std, unit_cost,
-                        holding_cost, penalty_cost, spoilage_rate,
-                        shelf_life_demand, budget_remaining, unit_volume,
-                    )
-            else:
-                # Fallback to analytical if RL not available or not built
-                q_star = self._analytical_q(
-                    demand_mean, demand_std, unit_cost,
-                    holding_cost, penalty_cost, spoilage_rate,
-                    shelf_life_demand, budget_remaining, unit_volume,
-                )
+            minimum_order_qty = float(rec.get("minimum_order_qty", rec.get("moq", 1.0)))
+            q_star = self._rule_based_q(
+                sku_id=sku_id,
+                demand_mean=demand_mean,
+                lead_time=lead_time,
+                minimum_order_qty=minimum_order_qty,
+            )
 
             # Enforce budget and capacity feasibility
             max_by_budget = budget_remaining / max(unit_cost, 1e-6)
@@ -238,3 +225,21 @@ class ReorderOptimisationAgent(BaseAgent):
             ]
         )
         return float(candidates[int(np.argmin(costs))])
+
+    def _rule_based_q(
+        self,
+        sku_id: str,
+        demand_mean: float,
+        lead_time: float,
+        minimum_order_qty: float,
+    ) -> float:
+        """Compute a stable inventory replenishment quantity using a rule-based formula."""
+        safety_buffer = 3
+        reorder_qty = float(demand_mean) * float(lead_time + safety_buffer)
+        reorder_qty = max(reorder_qty, minimum_order_qty, 1.0)
+        self._log.info(
+            "reorder.calculation",
+            sku=sku_id,
+            qty=round(reorder_qty, 2),
+        )
+        return float(reorder_qty)

@@ -62,6 +62,10 @@ class SimulationConfig(BaseSettings):
         description="Maximum number of suppliers generated per SKU.")
     seed: int = Field(42, ge=0,
         description="Global random seed.  Paper uses 42.")
+    full_coverage: bool = Field(False,
+        description="If true, InventoryMonitorAgent selects all SKUs every cycle for aggressive coverage.")
+    stockout_penalty_weight: float = Field(5.0, gt=0.0,
+        description="Alpha multiplier applied to stockout units when computing evaluation penalty cost.")
 
     @field_validator("category_names")
     @classmethod
