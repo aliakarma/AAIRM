@@ -159,6 +159,8 @@ class OptimisationConfig(BaseSettings):
         description="Annual holding cost as a fraction of unit cost h_i.")
     penalty_cost_multiplier: float = Field(3.0, gt=0.0,
         description="Stockout penalty as a multiple of unit cost p_i = mult * c_i.")
+    min_order_quantity: float = Field(50.0, ge=0.0,
+        description="Minimum order quantity safeguard to prevent zero-order behavior.")
     discount_factor: float = Field(0.99, gt=0.0, lt=1.0,
         description="RL discount factor γ in Eq. 5 of the paper.")
     rl_training_episodes: int = Field(400, gt=0,

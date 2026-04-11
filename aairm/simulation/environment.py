@@ -530,14 +530,15 @@ class RetailEnv:
         snapshot: dict[str, dict[str, Any]],
         realised_demand: dict[str, float] | None = None,
     ) -> tuple[float, bool]:
-        """Compute negative expected cost as reward.
+        """Compute reward with revenue, costs, and penalties.
 
-        Uses a simplified version of Eq. 3: stockout penalty minus
-        holding cost, so the RL agent learns to balance both.
-
-        Includes per-SKU constraints to prevent individual SKU collapse:
-        - Per-SKU high stockout ratio penalty (> 30% -> -50)
-        - Per-SKU low inventory ratio penalty (< 10% -> -50)
+        Formula: reward = (
+            revenue
+            - holding_cost
+            - ordering_cost
+            - stockout_penalty * stockout_units
+            - lost_sales_penalty * lost_demand
+        )
         """
         if self._erp is None:
             return 0.0, False
@@ -547,33 +548,62 @@ class RetailEnv:
         expired_units = float(day_metrics.get("expired_units", 0.0))
         total_demand = float(day_metrics.get("total_demand", 0.0))
 
-        on_hand_cost = 0.0
-        avg_unit_cost = 0.0
+        # Calculate revenue and holding cost
+        revenue = 0.0
+        holding_cost = 0.0
         total_on_hand = 0.0
         demand_capacity_units = 0.0
-        for rec in snapshot.values():
+        
+        for sku_id, rec in snapshot.items():
             unit_cost = float(rec.get("unit_cost", 5.0))
             on_hand = float(rec.get("on_hand", 0.0))
+            fulfilled = float(rec.get("last_fulfilled", 0.0))
             mu_d = float(rec.get("demand_mean_daily", 0.0))
-            on_hand_cost += on_hand * unit_cost
-            avg_unit_cost += unit_cost
+            
+            # Get margin rate from catalog
+            catalog_rec = self._catalog[sku_id] if self._catalog else None
+            margin_rate = float(catalog_rec.margin_rate) if catalog_rec else 0.25
+            sell_price = unit_cost * (1.0 + margin_rate)
+            
+            revenue += fulfilled * sell_price
+            holding_cost += on_hand * unit_cost * self._holding_cost_rate_daily
             total_on_hand += on_hand
             demand_capacity_units += mu_d * self._inventory_cap_days
 
-        n = max(len(snapshot), 1)
-        avg_unit_cost /= n
-        holding_cost = on_hand_cost * self._holding_cost_rate_daily
+        # Spoilage cost
+        avg_unit_cost = sum(float(rec.get("unit_cost", 5.0)) for rec in snapshot.values()) / max(len(snapshot), 1)
         spoilage_cost = expired_units * avg_unit_cost * self._spoilage_cost_mult
 
+        # Capacity penalty
         excess_inventory = max(0.0, total_on_hand - demand_capacity_units)
         cap_penalty = self._inventory_cap_penalty * excess_inventory * avg_unit_cost
 
-        reward = -(ordering_cost + holding_cost + spoilage_cost + cap_penalty)
+        # Stockout and lost sales penalties
+        stockout_penalty = 10.0
+        lost_sales_penalty = 15.0
+        lost_demand = stockout_units  # stockout_units = unmet demand
 
-        stockout_rate = stockout_units / (total_demand + 1e-6)
-        reward -= self._stockout_penalty_mult * stockout_rate * total_demand
+        reward = (
+            revenue
+            - holding_cost
+            - ordering_cost
+            - stockout_penalty * stockout_units
+            - lost_sales_penalty * lost_demand
+        )
+
+        # Additional penalties for capacity and spoilage
+        reward -= spoilage_cost + cap_penalty
+
+        logger.info("reward.breakdown", 
+                    revenue=revenue, 
+                    holding_cost=holding_cost, 
+                    ordering_cost=ordering_cost, 
+                    stockout=stockout_penalty * stockout_units, 
+                    lost_sales=lost_sales_penalty * lost_demand, 
+                    reward=reward)
 
         # Per-SKU constraints: prevent individual SKU collapse
+        stockout_rate = stockout_units / (total_demand + 1e-6)
         if realised_demand is not None:
             for sku_id, sku_demand in realised_demand.items():
                 sku_fulfilled = float(snapshot.get(sku_id, {}).get("last_fulfilled", 0.0))

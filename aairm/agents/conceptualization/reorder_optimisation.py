@@ -49,12 +49,13 @@ class ReorderOptimisationAgent(BaseAgent):
     ) -> None:
         super().__init__("C2", config)
         self._original_mode: str = config.mode
-        self._mode: str = "analytical"
+        self._mode: str = config.mode if (config.mode == "rl" and rl_policy is not None) else "analytical"
         self._policy = rl_policy
         self._budget: float = config.budget
         self._capacity: float = config.warehouse_capacity
         self._h_rate: float = config.holding_cost_rate
         self._penalty_mult: float = config.penalty_cost_multiplier
+        self._min_order_quantity: float = config.min_order_quantity
 
     def run(self, state: AgentState) -> AgentState:
         """Compute optimal order quantities for all low-stock and candidate SKUs.
@@ -144,12 +145,62 @@ class ReorderOptimisationAgent(BaseAgent):
             )
 
             minimum_order_qty = float(rec.get("minimum_order_qty", rec.get("moq", 1.0)))
-            q_star = self._rule_based_q(
-                sku_id=sku_id,
-                demand_mean=demand_mean,
-                lead_time=lead_time,
-                minimum_order_qty=minimum_order_qty,
-            )
+            min_order_quantity = self._min_order_quantity
+
+            if self._mode == "rl" and self._policy is not None:
+                # RL mode: use trained PPO policy
+                # Observation: [effective_available, forecast_mean, forecast_std, days_to_expiry_norm, budget_fraction_remaining]
+                effective_available = float(rec.get("effective_available", 0.0))
+                days_to_expiry_norm = min(days_to_expiry / 365.0, 1.0)  # normalize to [0,1]
+                budget_fraction_remaining = budget_remaining / self._budget
+
+                obs = np.array([
+                    effective_available,
+                    demand_mean,
+                    demand_std,
+                    days_to_expiry_norm,
+                    budget_fraction_remaining
+                ], dtype=np.float32)
+
+                max_order_limit = float(rec.get("max_order_quantity", 1000.0))
+                q_star: float
+                try:
+                    action, _ = self._policy.predict(obs, deterministic=True)
+                    action_value = float(np.asarray(action).item())
+                    scaled_action = (action_value + 1.0) / 2.0  # [-1,1] -> [0,1]
+                    order_qty = float(max(0.0, scaled_action * max_order_limit))
+                    self._log.debug("action.scaling", raw_action=action_value, scaled_action=scaled_action, order_qty=order_qty)
+
+                    if order_qty <= 0.0:
+                        raise ValueError("RL policy produced zero order quantity")
+                    q_star = order_qty
+                except Exception as exc:
+                    reorder_point = rec.get("reorder_point")
+                    if reorder_point is not None:
+                        fallback_qty = max(float(reorder_point) * 1.5, min_order_quantity)
+                    else:
+                        fallback_qty = min_order_quantity
+                    q_star = float(fallback_qty)
+                    self._log.warning(
+                        "fallback.used",
+                        reason="invalid_rl_action",
+                        sku=sku_id,
+                        order_qty=q_star,
+                        error=str(exc),
+                    )
+            else:
+                # Analytical mode
+                q_star = self._rule_based_q(
+                    sku_id=sku_id,
+                    demand_mean=demand_mean,
+                    lead_time=lead_time,
+                    minimum_order_qty=minimum_order_qty,
+                )
+
+            # Minimum order quantity safeguard
+            if q_star < min_order_quantity and (sku_id in state.low_stock_skus or sku_id in state.replenishment_candidates):
+                q_star = min_order_quantity
+                self._log.debug("order.adjusted_min", adjusted_qty=q_star)
 
             # Enforce budget and capacity feasibility
             max_by_budget = budget_remaining / max(unit_cost, 1e-6)
