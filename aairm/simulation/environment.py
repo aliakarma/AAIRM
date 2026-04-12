@@ -530,80 +530,88 @@ class RetailEnv:
         snapshot: dict[str, dict[str, Any]],
         realised_demand: dict[str, float] | None = None,
     ) -> tuple[float, bool]:
-        """Compute reward with revenue, costs, and penalties.
+        """Compute professionally balanced inventory optimization reward.
 
-        Formula: reward = (
-            revenue
-            - holding_cost
-            - ordering_cost
-            - stockout_penalty * stockout_units
-            - lost_sales_penalty * lost_demand
-        )
+        Strongly penalizes stockouts, encourages high service level,
+        maintains reasonable inventory, and keeps cost efficiency.
         """
         if self._erp is None:
             return 0.0, False
 
+        # Core components
+        fulfilled_demand = float(day_metrics.get("fulfilled_units", 0.0))
+        demand = float(day_metrics.get("total_demand", 0.0))
         ordering_cost = float(day_metrics.get("ordering_cost", 0.0))
         stockout_units = float(day_metrics.get("stockout_units", 0.0))
-        expired_units = float(day_metrics.get("expired_units", 0.0))
-        total_demand = float(day_metrics.get("total_demand", 0.0))
+        lost_sales = stockout_units
 
-        # Calculate revenue and holding cost
+        # Calculate revenue and inventory level
         revenue = 0.0
-        holding_cost = 0.0
         total_on_hand = 0.0
-        demand_capacity_units = 0.0
+        avg_unit_cost = 0.0
         
         for sku_id, rec in snapshot.items():
             unit_cost = float(rec.get("unit_cost", 5.0))
             on_hand = float(rec.get("on_hand", 0.0))
             fulfilled = float(rec.get("last_fulfilled", 0.0))
-            mu_d = float(rec.get("demand_mean_daily", 0.0))
             
             # Get margin rate from catalog
             catalog_rec = self._catalog[sku_id] if self._catalog else None
             margin_rate = float(catalog_rec.margin_rate) if catalog_rec else 0.25
-            sell_price = unit_cost * (1.0 + margin_rate)
+            selling_price = unit_cost * (1.0 + margin_rate)
             
-            revenue += fulfilled * sell_price
-            holding_cost += on_hand * unit_cost * self._holding_cost_rate_daily
+            revenue += fulfilled * selling_price
             total_on_hand += on_hand
-            demand_capacity_units += mu_d * self._inventory_cap_days
+            avg_unit_cost += unit_cost
 
-        # Spoilage cost
-        avg_unit_cost = sum(float(rec.get("unit_cost", 5.0)) for rec in snapshot.values()) / max(len(snapshot), 1)
-        spoilage_cost = expired_units * avg_unit_cost * self._spoilage_cost_mult
+        n = max(len(snapshot), 1)
+        avg_unit_cost /= n
+        holding_cost_per_unit = avg_unit_cost * self._holding_cost_rate_daily
+        holding_cost = total_on_hand * holding_cost_per_unit
 
-        # Capacity penalty
-        excess_inventory = max(0.0, total_on_hand - demand_capacity_units)
-        cap_penalty = self._inventory_cap_penalty * excess_inventory * avg_unit_cost
+        # Strong penalties
+        stockout_penalty = 50.0 * stockout_units
+        lost_sales_penalty = 100.0 * lost_sales
 
-        # Stockout and lost sales penalties
-        stockout_penalty = 10.0
-        lost_sales_penalty = 15.0
-        lost_demand = stockout_units  # stockout_units = unmet demand
+        # Service level reward
+        fill_rate = fulfilled_demand / demand if demand > 0 else 1.0
+        service_reward = 20.0 * fill_rate
 
+        # Inventory balance penalty (avoid zero inventory)
+        if total_on_hand <= 0:
+            zero_inventory_penalty = 200.0
+        else:
+            zero_inventory_penalty = 0.0
+
+        # Overstock penalty (soft)
+        overstock_penalty = 0.01 * (total_on_hand ** 2)
+
+        # Final reward
         reward = (
             revenue
+            + service_reward
             - holding_cost
             - ordering_cost
-            - stockout_penalty * stockout_units
-            - lost_sales_penalty * lost_demand
+            - stockout_penalty
+            - lost_sales_penalty
+            - zero_inventory_penalty
+            - overstock_penalty
         )
 
-        # Additional penalties for capacity and spoilage
-        reward -= spoilage_cost + cap_penalty
-
-        logger.info("reward.breakdown", 
-                    revenue=revenue, 
-                    holding_cost=holding_cost, 
-                    ordering_cost=ordering_cost, 
-                    stockout=stockout_penalty * stockout_units, 
-                    lost_sales=lost_sales_penalty * lost_demand, 
-                    reward=reward)
+        # Logging (important for debugging)
+        logger.debug(
+            "reward.breakdown",
+            revenue=revenue,
+            holding_cost=holding_cost,
+            ordering_cost=ordering_cost,
+            stockout_units=stockout_units,
+            lost_sales=lost_sales,
+            fill_rate=fill_rate,
+            reward=reward
+        )
 
         # Per-SKU constraints: prevent individual SKU collapse
-        stockout_rate = stockout_units / (total_demand + 1e-6)
+        stockout_rate = stockout_units / (demand + 1e-6)
         if realised_demand is not None:
             for sku_id, sku_demand in realised_demand.items():
                 sku_fulfilled = float(snapshot.get(sku_id, {}).get("last_fulfilled", 0.0))
@@ -623,12 +631,12 @@ class RetailEnv:
         if collapse:
             reward -= self._stockout_collapse_penalty
 
-        fill_rate = 1.0 - stockout_rate
-        if fill_rate < self._fill_rate_guard_threshold:
+        fill_rate_check = 1.0 - stockout_rate
+        if fill_rate_check < self._fill_rate_guard_threshold:
             reward -= self._fill_rate_guard_penalty
 
         inventory_level = total_on_hand
-        inventory_ratio = inventory_level / (total_demand + 1e-6)
+        inventory_ratio = inventory_level / (demand + 1e-6)
         if inventory_ratio < 0.1:
             reward -= 1000.0
 
