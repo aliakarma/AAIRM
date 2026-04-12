@@ -233,7 +233,16 @@ class Benchmarker:
                 float(rec.get("on_hand", 0.0)) * float(rec.get("unit_cost", 5.0)) * (0.25 / 365.0)
                 for rec in snap.values()
             )
-            pen = day_stockout * 5.0 * 3.0  # avg unit_cost * penalty_mult
+            alpha = float(self._config.simulation.stockout_penalty_weight)
+            pen = day_stockout * alpha
+            logger.info(
+                "cost.breakdown",
+                day=day,
+                ordering_cost=round(proc, 2),
+                holding_cost=round(hold, 2),
+                stockout_cost=round(pen, 2),
+                total_cost=round(proc + hold + pen, 2),
+            )
             daily_proc_cost.append(proc)
             daily_hold_cost.append(hold)
             daily_penalty_cost.append(pen)

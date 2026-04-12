@@ -48,12 +48,14 @@ class ReorderOptimisationAgent(BaseAgent):
         rl_policy: Any = None,
     ) -> None:
         super().__init__("C2", config)
-        self._mode: str = config.mode
+        self._original_mode: str = config.mode
+        self._mode: str = config.mode if (config.mode == "rl" and rl_policy is not None) else "analytical"
         self._policy = rl_policy
         self._budget: float = config.budget
         self._capacity: float = config.warehouse_capacity
         self._h_rate: float = config.holding_cost_rate
         self._penalty_mult: float = config.penalty_cost_multiplier
+        self._min_order_quantity: float = config.min_order_quantity
 
     def run(self, state: AgentState) -> AgentState:
         """Compute optimal order quantities for all low-stock and candidate SKUs.
@@ -80,6 +82,12 @@ class ReorderOptimisationAgent(BaseAgent):
         """
         t0 = self._log_start(state, mode=self._mode, n_low_stock=len(state.low_stock_skus),
                            n_candidates=len(state.replenishment_candidates))
+        if self._original_mode != self._mode:
+            self._log.info(
+                "mode.override",
+                message="RL disabled, using analytical policy",
+                original_mode=self._original_mode,
+            )
 
         # Combine low_stock (high priority) and candidates
         all_skus = state.low_stock_skus + state.replenishment_candidates
@@ -112,6 +120,7 @@ class ReorderOptimisationAgent(BaseAgent):
             unit_volume = float(rec.get("unit_volume", 0.05))
             penalty_cost = unit_cost * self._penalty_mult
             holding_cost = unit_cost * self._h_rate
+            lead_time = float(rec.get("lead_time_days", 5.0))
 
             # Perishability
             days_to_expiry = float(rec.get("days_to_expiry", 9999.0))
@@ -135,34 +144,63 @@ class ReorderOptimisationAgent(BaseAgent):
                 unit_volume=unit_volume,
             )
 
-            if self._mode == "rl" and self._policy is not None and hasattr(self._policy, '_model') and self._policy._model is not None:
-                obs = np.array(
-                    [
-                        float(rec.get("effective_available", 0.0)),
-                        demand_mean,
-                        demand_std,
-                        days_to_expiry if days_to_expiry < 9000 else 365.0,
-                        budget_remaining / self._budget,  # normalised
-                    ],
-                    dtype=np.float32,
-                )
+            minimum_order_qty = float(rec.get("minimum_order_qty", rec.get("moq", 1.0)))
+            min_order_quantity = self._min_order_quantity
+
+            if self._mode == "rl" and self._policy is not None:
+                # RL mode: use trained PPO policy
+                # Observation: [effective_available, forecast_mean, forecast_std, days_to_expiry_norm, budget_fraction_remaining]
+                effective_available = float(rec.get("effective_available", 0.0))
+                days_to_expiry_norm = min(days_to_expiry / 365.0, 1.0)  # normalize to [0,1]
+                budget_fraction_remaining = budget_remaining / self._budget
+
+                obs = np.array([
+                    effective_available,
+                    demand_mean,
+                    demand_std,
+                    days_to_expiry_norm,
+                    budget_fraction_remaining
+                ], dtype=np.float32)
+
+                max_order_limit = float(rec.get("max_order_quantity", 1000.0))
+                q_star: float
                 try:
                     action, _ = self._policy.predict(obs, deterministic=True)
-                    q_star = float(np.clip(action[0], 0.0, 1e6))
-                except Exception as exc:  # noqa: BLE001
-                    self._append_error(state, f"RL policy failed for {sku_id}: {exc}")
-                    q_star = self._analytical_q(
-                        demand_mean, demand_std, unit_cost,
-                        holding_cost, penalty_cost, spoilage_rate,
-                        shelf_life_demand, budget_remaining, unit_volume,
+                    action_value = float(np.asarray(action).item())
+                    scaled_action = (action_value + 1.0) / 2.0  # [-1,1] -> [0,1]
+                    order_qty = float(max(0.0, scaled_action * max_order_limit))
+                    self._log.debug("action.scaling", raw_action=action_value, scaled_action=scaled_action, order_qty=order_qty)
+
+                    if order_qty <= 0.0:
+                        raise ValueError("RL policy produced zero order quantity")
+                    q_star = order_qty
+                except Exception as exc:
+                    reorder_point = rec.get("reorder_point")
+                    if reorder_point is not None:
+                        fallback_qty = max(float(reorder_point) * 1.5, min_order_quantity)
+                    else:
+                        fallback_qty = min_order_quantity
+                    q_star = float(fallback_qty)
+                    self._log.warning(
+                        "fallback.used",
+                        reason="invalid_rl_action",
+                        sku=sku_id,
+                        order_qty=q_star,
+                        error=str(exc),
                     )
             else:
-                # Fallback to analytical if RL not available or not built
-                q_star = self._analytical_q(
-                    demand_mean, demand_std, unit_cost,
-                    holding_cost, penalty_cost, spoilage_rate,
-                    shelf_life_demand, budget_remaining, unit_volume,
+                # Analytical mode
+                q_star = self._rule_based_q(
+                    sku_id=sku_id,
+                    demand_mean=demand_mean,
+                    lead_time=lead_time,
+                    minimum_order_qty=minimum_order_qty,
                 )
+
+            # Minimum order quantity safeguard
+            if q_star < min_order_quantity and (sku_id in state.low_stock_skus or sku_id in state.replenishment_candidates):
+                q_star = min_order_quantity
+                self._log.debug("order.adjusted_min", adjusted_qty=q_star)
 
             # Enforce budget and capacity feasibility
             max_by_budget = budget_remaining / max(unit_cost, 1e-6)
@@ -238,3 +276,21 @@ class ReorderOptimisationAgent(BaseAgent):
             ]
         )
         return float(candidates[int(np.argmin(costs))])
+
+    def _rule_based_q(
+        self,
+        sku_id: str,
+        demand_mean: float,
+        lead_time: float,
+        minimum_order_qty: float,
+    ) -> float:
+        """Compute a stable inventory replenishment quantity using a rule-based formula."""
+        safety_buffer = 3
+        reorder_qty = float(demand_mean) * float(lead_time + safety_buffer)
+        reorder_qty = max(reorder_qty, minimum_order_qty, 1.0)
+        self._log.info(
+            "reorder.calculation",
+            sku=sku_id,
+            qty=round(reorder_qty, 2),
+        )
+        return float(reorder_qty)

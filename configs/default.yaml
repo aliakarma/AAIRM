@@ -28,6 +28,8 @@ simulation:
   n_suppliers_min: 3
   n_suppliers_max: 5
   seed: 42                        # all paper results use seed=42
+  full_coverage: false
+  stockout_penalty_weight: 5.0
 
 forecasting:
   architecture: tft               # Temporal Fusion Transformer (paper default)

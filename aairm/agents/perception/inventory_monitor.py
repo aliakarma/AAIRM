@@ -96,6 +96,7 @@ class InventoryMonitorAgent(BaseAgent):
 
         low_stock: list[str] = []
         replenishment_candidates: list[str] = []
+        all_skus = list(snapshot.keys())
 
         for sku_id, rec in snapshot.items():
             on_hand: float = float(rec.get("on_hand", 0.0))
@@ -118,44 +119,35 @@ class InventoryMonitorAgent(BaseAgent):
             is_low = effective <= reorder_point
             is_overstock = effective > self._overstock_mult * reorder_point
 
-            # Soft threshold: SKUs where effective inventory < lead-time demand
-            lead_time_demand = lead_time * mu_d
-            is_candidate = effective < lead_time_demand
-
             # Enrich the snapshot record with derived fields
             rec["effective_available"] = round(effective, 2)
             rec["reorder_point"] = round(reorder_point, 2)
             rec["safety_stock"] = round(safety, 2)
             rec["is_low_stock"] = is_low
             rec["is_overstock"] = is_overstock
-            rec["lead_time_demand"] = round(lead_time_demand, 2)
-            rec["is_candidate"] = is_candidate
+            rec["lead_time_demand"] = round(lead_time * mu_d, 2)
 
             if is_low:
                 low_stock.append(sku_id)
-            elif is_candidate:
-                # Only add to candidates if not already in low_stock
-                replenishment_candidates.append(sku_id)
+
+        if self.config.full_coverage:
+            replenishment_candidates = all_skus
+        elif low_stock:
+            replenishment_candidates = low_stock.copy()
+        else:
+            n_to_select = max(len(all_skus) // 2, 1)
+            replenishment_candidates = all_skus[:n_to_select]
+
+        self._log.info(
+            "inventory.coverage",
+            total_skus=len(all_skus),
+            candidates=len(replenishment_candidates),
+            low_stock=len(low_stock),
+            full_coverage=self.config.full_coverage,
+        )
 
         state.sku_inventory_snapshot = snapshot
         state.low_stock_skus = low_stock
-        state.replenishment_candidates = replenishment_candidates
-
-        # Proactive fallback: ensure candidates always exist for forecasting/optimization.
-        # If both low_stock and candidates are empty, sample diverse SKUs randomly
-        # to keep the system active and ensure forecasts are generated.
-        if not low_stock and not replenishment_candidates:
-            # Proactively select a diverse set of SKUs (up to 10% of catalog)
-            n_to_select = max(1, len(snapshot) // 10)
-            candidate_ids = list(snapshot.keys())
-            sample = candidate_ids[::max(1, len(candidate_ids) // n_to_select)][:n_to_select]
-            replenishment_candidates = sample
-            self._log.info(
-                "inventory.proactive_sample",
-                n_candidates=len(replenishment_candidates),
-                reason="no_low_stock_or_candidates"
-            )
-
         state.replenishment_candidates = replenishment_candidates
 
         self._record_event(

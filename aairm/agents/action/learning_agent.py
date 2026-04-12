@@ -48,7 +48,12 @@ class LearningAgent(BaseAgent):
         checkpoint_dir: str | Path = "checkpoints",
     ) -> None:
         super().__init__("A3", config)
-        self._policy = rl_policy
+        self._policy = None
+        if rl_policy is not None:
+            self._log.info(
+                "mode.override",
+                message="RL disabled in LearningAgent, skipping policy updates",
+            )
         self._gamma = config.discount_factor
         self._checkpoint_dir = Path(checkpoint_dir)
         self._checkpoint_dir.mkdir(parents=True, exist_ok=True)
@@ -94,14 +99,13 @@ class LearningAgent(BaseAgent):
                 state, "learning.td_loss", td_loss=round(td_loss_val, 6)
             )
 
-        # 4. Update RL policy if buffer has enough transitions
-        if self._policy is not None and len(self._transitions) >= 64:
-            try:
-                self._policy.train(total_timesteps=len(self._transitions))
-                self._transitions.clear()
-                self._save_checkpoint(state.day)
-            except Exception as exc:  # noqa: BLE001
-                self._append_error(state, f"RL policy update failed: {exc}")
+        # 4. Skip RL policy updates while RL is disabled for stability.
+        if len(self._transitions) > 0:
+            self._log.info(
+                "learning.skip_rl",
+                n_transitions=len(self._transitions),
+                message="RL policy updates disabled in this run",
+            )
 
         self._log_end(
             state, t0,
