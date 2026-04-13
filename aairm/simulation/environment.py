@@ -25,8 +25,10 @@ Paper Section 5.1; Repo Guide Section 6.1.
 from __future__ import annotations
 
 from typing import Any
+import pickle
 
 import numpy as np
+from scipy import stats
 
 from aairm.simulation.demand_generator import DemandGenerator
 from aairm.simulation.erp_stub import ERPStub
@@ -84,6 +86,10 @@ class RetailEnv:
         self._gen: DemandGenerator | None = None
         self._sup: SupplierSimulator | None = None
         self._erp: ERPStub | None = None
+
+        # Demand normalizer
+        self._normalizer = DemandNormalizer()
+        self.normalizer_fitted = False
 
         # Current day
         self._day: int = 0
@@ -641,3 +647,69 @@ class RetailEnv:
             reward -= 1000.0
 
         return float(reward), collapse
+
+
+class DemandNormalizer:
+    """Robust demand normalizer using median and IQR scaling.
+
+    Fits on warm-up window to handle outliers and zero-demand SKUs.
+    """
+
+    def __init__(self) -> None:
+        self.median_demand: dict[str, float] = {}
+        self.iqr_demand: dict[str, float] = {}
+
+    def fit(self, demand_history: dict[str, np.ndarray]) -> "DemandNormalizer":
+        """Fit normalizer on demand history.
+
+        Args:
+            demand_history: {sku_id: np.ndarray of shape (n_days,)}.
+
+        Returns:
+            Self.
+        """
+        for sku_id, demands in demand_history.items():
+            self.median_demand[sku_id] = float(np.median(demands))
+            self.iqr_demand[sku_id] = float(stats.iqr(demands))
+        
+        # Save to pkl
+        import pathlib
+        output_dir = pathlib.Path("experiments/diagnostics")
+        output_dir.mkdir(parents=True, exist_ok=True)
+        with open(output_dir / "demand_normalizer.pkl", "wb") as f:
+            pickle.dump(self, f)
+        
+        return self
+
+    def transform(self, raw_demand: dict[str, float]) -> dict[str, float]:
+        """Normalize raw demand to robust scale.
+
+        Args:
+            raw_demand: {sku_id: float}.
+
+        Returns:
+            Normalized demand dict.
+        """
+        normalized = {}
+        for sku_id, demand in raw_demand.items():
+            median = self.median_demand.get(sku_id, 0.0)
+            iqr = self.iqr_demand.get(sku_id, 1.0)
+            normalized[sku_id] = (demand - median) / (iqr + 1e-8)
+        return normalized
+
+    def inverse_transform(self, scaled_order_qty: dict[str, float]) -> dict[str, int]:
+        """Convert normalized order quantities back to real units.
+
+        Args:
+            scaled_order_qty: {sku_id: float}.
+
+        Returns:
+            Integer order quantities >= 0.
+        """
+        real_orders = {}
+        for sku_id, scaled in scaled_order_qty.items():
+            median = self.median_demand.get(sku_id, 0.0)
+            iqr = self.iqr_demand.get(sku_id, 1.0)
+            real = scaled * (iqr + 1e-8) + median
+            real_orders[sku_id] = max(0, int(round(real)))
+        return real_orders
