@@ -315,3 +315,71 @@ def compute_all_metrics(
         "div_index": supplier_diversification_index(procurement_volumes),
         "spoilage_rate": spoilage_rate(demand, spoilage_units),
     }
+
+
+class PolicyCollapseError(Exception):
+    """Raised when policy collapses (fill_rate < 50% for 3 checks)."""
+
+
+class EmptyShelfError(Exception):
+    """Raised when inventory collapses (avg_inventory < 0.5 for 3 checks)."""
+
+
+class EarlyStopMonitor:
+    """Monitors experiment progress and stops early on policy failure."""
+
+    def __init__(self) -> None:
+        self.fill_rate_history = []
+        self.inventory_history = []
+        self.episode_count = 0
+
+    def check_early_stop(self, metrics: dict[str, float], config: dict, demand_history: dict, order_history: dict, inventory_snapshot: dict) -> None:
+        """Check for early stopping conditions every 10 episodes."""
+        self.episode_count += 1
+        
+        fill_rate = metrics.get("fill_rate", 1.0)
+        avg_inventory = metrics.get("avg_inventory", 1.0)
+        
+        self.fill_rate_history.append(fill_rate)
+        self.inventory_history.append(avg_inventory)
+        
+        if self.episode_count % 10 == 0:
+            # Check last 3
+            if len(self.fill_rate_history) >= 3:
+                last_3_fill = self.fill_rate_history[-3:]
+                if all(fr < 0.50 for fr in last_3_fill):
+                    self._save_diagnostics(config, demand_history, order_history, inventory_snapshot)
+                    raise PolicyCollapseError(
+                        "Policy has collapsed: fill_rate below 50% for 30 consecutive episodes. "
+                        "Check demand normalization and replenishment config."
+                    )
+            
+            if len(self.inventory_history) >= 3:
+                last_3_inv = self.inventory_history[-3:]
+                if all(inv < 0.5 for inv in last_3_inv):
+                    self._save_diagnostics(config, demand_history, order_history, inventory_snapshot)
+                    raise EmptyShelfError(
+                        "Inventory has collapsed to near-zero. Emergency: check order quantities."
+                    )
+
+    def _save_diagnostics(self, config: dict, demand_history: dict, order_history: dict, inventory_snapshot: dict) -> None:
+        """Save diagnostics dump."""
+        import json
+        from pathlib import Path
+        import datetime
+        
+        ts = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        output_dir = Path("experiments/diagnostics")
+        output_dir.mkdir(parents=True, exist_ok=True)
+        dump_path = output_dir / f"collapse_dump_{ts}.json"
+        
+        dump = {
+            "timestamp": ts,
+            "config": config,
+            "last_10_demand": {sku: list(demands[-10:]) for sku, demands in demand_history.items()},
+            "last_10_orders": {sku: list(orders[-10:]) for sku, orders in order_history.items()},
+            "current_inventory": inventory_snapshot,
+        }
+        
+        with open(dump_path, "w") as f:
+            json.dump(dump, f, indent=2, default=str)

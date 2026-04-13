@@ -284,13 +284,32 @@ class ReorderOptimisationAgent(BaseAgent):
         lead_time: float,
         minimum_order_qty: float,
     ) -> float:
-        """Compute a stable inventory replenishment quantity using a rule-based formula."""
-        safety_buffer = 3
-        reorder_qty = float(demand_mean) * float(lead_time + safety_buffer)
-        reorder_qty = max(reorder_qty, minimum_order_qty, 1.0)
+        """Compute order quantity using newsvendor-style formula."""
+        # Reorder point: demand during lead time + safety stock
+        demand_lead = demand_mean * lead_time
+        # Assume demand_std ~ demand_mean * 0.2 (from synthetic)
+        demand_std = demand_mean * 0.2
+        z = 1.645  # 95% service level
+        safety_stock = z * demand_std * (lead_time ** 0.5)
+        reorder_point = demand_lead + safety_stock
+        
+        # Assume current_inventory is 0 for simplicity (low stock)
+        current_inventory = 0
+        
+        # Target stock: 14 days demand + safety stock
+        target_days = 14
+        demand_target = demand_mean * target_days
+        safety_stock_target = z * demand_std * (target_days ** 0.5)
+        target_stock = demand_target + safety_stock_target
+        
+        order_qty = max(0, target_stock - current_inventory)
+        order_qty = max(order_qty, minimum_order_qty)
+        
         self._log.info(
             "reorder.calculation",
             sku=sku_id,
-            qty=round(reorder_qty, 2),
+            reorder_point=round(reorder_point, 2),
+            target_stock=round(target_stock, 2),
+            qty=round(order_qty, 2),
         )
-        return float(reorder_qty)
+        return float(order_qty)

@@ -1,0 +1,13 @@
+# Replenishment Configuration
+# Parameters for newsvendor-style order quantity calculation
+
+service_level: 0.95
+target_inventory_days: 14
+
+# Minimum order quantities by category
+min_order_qty:
+  grocery: 10
+  frozen_food: 5
+  apparel: 1
+  cosmetics: 5
+  dry_fruits: 5

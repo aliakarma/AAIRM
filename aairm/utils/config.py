@@ -56,6 +56,8 @@ class SimulationConfig(BaseSettings):
         description="Total simulation horizon in days (train + test).")
     test_horizon_days: int = Field(365, gt=0,
         description="Test horizon in days.  Must be < simulation_horizon_days.")
+    warm_up_days: int = Field(60, gt=0,
+        description="Warm-up days for real-world evaluation (not counted in results).")
     n_suppliers_min: int = Field(3, ge=1,
         description="Minimum number of suppliers generated per SKU.")
     n_suppliers_max: int = Field(5, ge=1,
@@ -227,6 +229,21 @@ class GovernanceConfig(BaseSettings):
         description="Ambient-storage capacity in volumetric units.")
 
 
+class ReplenishmentConfig(BaseSettings):
+    """Replenishment policy parameters."""
+
+    model_config = SettingsConfigDict(env_prefix="AAIRM_REPL_")
+
+    service_level: float = Field(0.95, gt=0.0, le=1.0,
+        description="Service level for newsvendor safety stock calculation.")
+    target_inventory_days: int = Field(14, gt=0,
+        description="Target inventory coverage in days.")
+    min_order_qty: dict[str, int] = Field(
+        default={"grocery": 10, "frozen_food": 5, "apparel": 1, "cosmetics": 5, "dry_fruits": 5},
+        description="Minimum order quantities by category."
+    )
+
+
 class LLMConfig(BaseSettings):
     """LLM backbone configuration for all agent reasoning."""
 
@@ -281,6 +298,7 @@ class AAIRMConfig(BaseSettings):
     optimisation: OptimisationConfig = Field(default_factory=OptimisationConfig)
     supplier_ranking: SupplierRankingConfig = Field(default_factory=SupplierRankingConfig)
     governance: GovernanceConfig = Field(default_factory=GovernanceConfig)
+    replenishment: ReplenishmentConfig = Field(default_factory=ReplenishmentConfig)
     llm: LLMConfig = Field(default_factory=LLMConfig)
 
     results_dir: Path = Field(Path("experiments/results"),
