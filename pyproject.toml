@@ -65,7 +65,7 @@ rl = [
 forecasting = [
     "torch>=2.2.0",
     "pytorch-forecasting>=1.0.0",
-    "pytorch-lightning>=2.0.0",
+    "pytorch-lightning>=2.6.1",
 ]
 datasets = [
     "kaggle>=1.6.0",
