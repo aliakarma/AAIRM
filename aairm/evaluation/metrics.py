@@ -339,6 +339,7 @@ class EarlyStopMonitor:
         
         fill_rate = metrics.get("fill_rate", 1.0)
         avg_inventory = metrics.get("avg_inventory", 1.0)
+        div_index = metrics.get("div_index", 1.0)
         
         self.fill_rate_history.append(fill_rate)
         self.inventory_history.append(avg_inventory)
@@ -361,6 +362,11 @@ class EarlyStopMonitor:
                     raise EmptyShelfError(
                         "Inventory has collapsed to near-zero. Emergency: check order quantities."
                     )
+            
+            # DivIdx warning
+            if len(self.fill_rate_history) >= 3:  # reuse for timing
+                if div_index < 0.60:
+                    print(f"WARNING: DivIdx {div_index:.3f} below 0.60, check supplier diversification")
 
     def _save_diagnostics(self, config: dict, demand_history: dict, order_history: dict, inventory_snapshot: dict) -> None:
         """Save diagnostics dump."""

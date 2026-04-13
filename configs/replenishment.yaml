@@ -4,10 +4,33 @@
 service_level: 0.95
 target_inventory_days: 14
 
+service_level_targets:
+  grocery: 0.97
+  frozen_food: 0.95
+  apparel: 0.90
+  cosmetics: 0.92
+  dry_fruits: 0.93
+
 # Minimum order quantities by category
 min_order_qty:
-  grocery: 10
-  frozen_food: 5
+  grocery: 5
+  frozen_food: 3
   apparel: 1
-  cosmetics: 5
+  cosmetics: 1
+  dry_fruits: 2
+
+# Review period days by category
+review_period_days:
+  grocery: 3
+  frozen_food: 3
+  apparel: 7
+  cosmetics: 7
   dry_fruits: 5
+
+# Max order days supply by category
+max_order_days_supply:
+  grocery: 14
+  frozen_food: 10
+  apparel: 30
+  cosmetics: 21
+  dry_fruits: 14

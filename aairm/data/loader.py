@@ -101,6 +101,7 @@ class DataLoader:
             n_suppliers_min=sim_cfg.n_suppliers_min,
             n_suppliers_max=sim_cfg.n_suppliers_max,
             seed=sim_cfg.seed,
+            config=self._config,
         )
         adapter = SyntheticAdapter(catalog, gen, sup)
         data = adapter.to_unified_schema()

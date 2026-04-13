@@ -46,8 +46,7 @@ class NegotiationAgent(BaseAgent):
     def __init__(self, config: LLMConfig, use_llm: bool = False) -> None:
         super().__init__("C4", config)
         self._use_llm = use_llm and bool(os.getenv("OPENAI_API_KEY"))
-        self._llm_executor: Any = None
-
+        self._llm_executor: Any = None        self.recent_allocations: dict[str, float] = {}  # rolling 14-day supplier allocations
         if self._use_llm:
             self._llm_executor = self._build_llm_executor(config)
 
@@ -82,7 +81,9 @@ class NegotiationAgent(BaseAgent):
             q_star = state.order_proposals.get(sku_id, 0.0)
             rec = state.sku_inventory_snapshot.get(sku_id, {})
             days_to_expiry = float(rec.get("days_to_expiry", 9999.0))
-            best_supplier = ranked_suppliers[0]
+            
+            # Select supplier with diversification
+            best_supplier = self._select_supplier(ranked_suppliers, q_star)
 
             if self._use_llm and self._llm_executor is not None:
                 negotiated = self._llm_negotiate(
@@ -94,6 +95,16 @@ class NegotiationAgent(BaseAgent):
                 )
 
             terms[sku_id] = negotiated
+            
+            # Update recent allocations
+            supplier_id = negotiated["supplier_id"]
+            self.recent_allocations[supplier_id] = self.recent_allocations.get(supplier_id, 0) + q_star
+            # Keep rolling 14-day window (simplified, assume daily update)
+            if len(self.recent_allocations) > 14:
+                # Remove oldest, but since dict, approximate
+                oldest = min(self.recent_allocations, key=self.recent_allocations.get)
+                del self.recent_allocations[oldest]
+            
             self._record_event(
                 state, "negotiation.complete",
                 sku_id=sku_id,
@@ -105,6 +116,24 @@ class NegotiationAgent(BaseAgent):
         state.negotiated_terms = terms
         self._log_end(state, t0, n_terms=len(terms))
         return state
+
+    def _select_supplier(self, ranked_suppliers: list[dict], order_qty: float) -> dict:
+        """Select supplier considering diversification."""
+        total_alloc = sum(self.recent_allocations.values()) + 1e-8
+        current_shares = {s["supplier_id"]: self.recent_allocations.get(s["supplier_id"], 0) / total_alloc
+                          for s in ranked_suppliers}
+        
+        scores = []
+        for sup in ranked_suppliers:
+            concentration_penalty = max(0, current_shares[sup["supplier_id"]] - 0.5)
+            reliability = sup.get("reliability", 0.8)
+            score = reliability * (1 - 0.4 * concentration_penalty)
+            scores.append((sup, score))
+        
+        scores.sort(key=lambda x: x[1], reverse=True)
+        selected = scores[0][0]
+        self._log.info("supplier.selected", supplier_id=selected["supplier_id"], score=scores[0][1])
+        return selected
 
     # ------------------------------------------------------------------
     # Simulation-mode deterministic negotiation

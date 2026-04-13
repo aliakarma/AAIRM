@@ -31,6 +31,9 @@ class LightGBMForecaster(BaseForecaster):
         self.model: lgb.Booster | None = None
         self.fitted = False
         self.fallback_active = False
+        self.is_warm = False
+        self._demand_history: dict[str, list[float]] = {}
+        self.normalizer = None  # assume set externally
 
     def pre_train(
         self,
@@ -208,6 +211,59 @@ class LightGBMForecaster(BaseForecaster):
         
         logger.info("forecast.mode", mode="empirical_fallback", horizon=horizon)
         return forecasts
+
+    def predict_total_demand(self, sku_id: str, n_days: int) -> float:
+        """Returns expected total demand over next n_days in real units."""
+        if not self.is_warm:
+            # Fallback: use rolling mean * n_days
+            history = self._demand_history.get(sku_id, [1.0])
+            return float(np.mean(history[-14:])) * n_days
+
+        # Use recursive multi-step forecast
+        predictions = []
+        current_features = self._get_features(sku_id)
+        for step in range(n_days):
+            pred = self.model.predict([current_features])[0]
+            pred = max(0.0, pred)  # demand cannot be negative
+            predictions.append(pred)
+            # Update lag features for next step
+            current_features = self._shift_lag_features(current_features, pred)
+
+        # Inverse-transform from normalized to real units
+        total = sum(predictions)
+        if self.normalizer:
+            total = self.normalizer.inverse_transform_scalar(total, sku_id)
+        
+        if n_days == 7 and total < 0.1:
+            logger.warning('forecast_suspiciously_low', sku=sku_id, value=total)
+        
+        return float(total)
+
+    def predict_demand_std(self, sku_id: str, n_days: int) -> float:
+        """Returns std of demand forecast over n_days for safety stock calc."""
+        history = self._demand_history.get(sku_id, [])
+        if len(history) < 7:
+            return float(np.mean(history)) * 0.5 if history else 1.0
+        # Use rolling std of recent actuals scaled to n_days
+        recent_std = float(np.std(history[-14:], ddof=1))
+        return recent_std * np.sqrt(n_days)
+
+    def update_demand(self, sku_id: str, actual_demand: float):
+        """Update demand history."""
+        if sku_id not in self._demand_history:
+            self._demand_history[sku_id] = []
+        self._demand_history[sku_id].append(actual_demand)
+        self._demand_history[sku_id] = self._demand_history[sku_id][-28:]
+
+    def _get_features(self, sku_id: str) -> list:
+        """Get current features for prediction."""
+        # Placeholder, need to implement based on training features
+        return [0] * 10  # match feature_cols
+
+    def _shift_lag_features(self, features: list, new_demand: float) -> list:
+        """Shift lag features for recursive prediction."""
+        # Placeholder
+        return features
 
     def forecast_uncertainty(self) -> tuple[float, float]:
         """Return confidence interval [low, high] for forecast."""

@@ -94,6 +94,9 @@ class RetailEnv:
         # Current day
         self._day: int = 0
 
+        # On order quantities: {sku_id: qty}
+        self.on_order_qty: dict[str, float] = {}
+
         # Accumulators for metric computation
         self._total_demand: dict[str, float] = {}
         self._total_fulfilled: dict[str, float] = {}

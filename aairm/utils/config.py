@@ -239,13 +239,42 @@ class ReplenishmentConfig(BaseSettings):
     target_inventory_days: int = Field(14, gt=0,
         description="Target inventory coverage in days.")
     min_order_qty: dict[str, int] = Field(
-        default={"grocery": 10, "frozen_food": 5, "apparel": 1, "cosmetics": 5, "dry_fruits": 5},
+        default={"grocery": 5, "frozen_food": 3, "apparel": 1, "cosmetics": 1, "dry_fruits": 2},
         description="Minimum order quantities by category."
+    )
+    review_period_days: dict[str, int] = Field(
+        default={"grocery": 3, "frozen_food": 3, "apparel": 7, "cosmetics": 7, "dry_fruits": 5},
+        description="Review period days by category."
+    )
+    service_level_targets: dict[str, float] = Field(
+        default={"grocery": 0.97, "frozen_food": 0.95, "apparel": 0.90, "cosmetics": 0.92, "dry_fruits": 0.93},
+        description="Service level targets by category."
+    )
+    max_order_days_supply: dict[str, int] = Field(
+        default={"grocery": 14, "frozen_food": 10, "apparel": 30, "cosmetics": 21, "dry_fruits": 14},
+        description="Maximum order quantity in days of supply by category."
     )
 
 
-class LLMConfig(BaseSettings):
+class SupplierConfig(BaseSettings):
+    """Supplier lead time parameters."""
+
+    model_config = SettingsConfigDict(env_prefix="AAIRM_SUP_")
+
+    lead_time_days: dict[str, dict[str, float]] = Field(
+        default={
+            "grocery": {"mean": 2, "std": 0.5, "min": 1, "max": 4},
+            "frozen_food": {"mean": 2, "std": 0.5, "min": 1, "max": 3},
+            "apparel": {"mean": 5, "std": 1.0, "min": 3, "max": 10},
+            "cosmetics": {"mean": 4, "std": 1.0, "min": 2, "max": 7},
+            "dry_fruits": {"mean": 3, "std": 0.5, "min": 2, "max": 5},
+        },
+        description="Lead time parameters by category."
+    )
     """LLM backbone configuration for all agent reasoning."""
+
+
+class LLMConfig(BaseSettings):
 
     model_config = SettingsConfigDict(env_prefix="AAIRM_LLM_")
 
@@ -299,6 +328,7 @@ class AAIRMConfig(BaseSettings):
     supplier_ranking: SupplierRankingConfig = Field(default_factory=SupplierRankingConfig)
     governance: GovernanceConfig = Field(default_factory=GovernanceConfig)
     replenishment: ReplenishmentConfig = Field(default_factory=ReplenishmentConfig)
+    supplier: SupplierConfig = Field(default_factory=SupplierConfig)
     llm: LLMConfig = Field(default_factory=LLMConfig)
 
     results_dir: Path = Field(Path("experiments/results"),

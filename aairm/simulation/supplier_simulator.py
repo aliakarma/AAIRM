@@ -21,7 +21,7 @@ from typing import Any
 
 import numpy as np
 
-from aairm.simulation.sku_catalog import SKUCatalog, SKURecord
+from aairm.utils.config import AAIRMConfig
 
 _DELAY_PROBABILITY = 0.15
 _PARTIAL_PROBABILITY = 0.05
@@ -64,11 +64,13 @@ class SupplierSimulator:
         n_suppliers_min: int = 3,
         n_suppliers_max: int = 5,
         seed: int = 42,
+        config: AAIRMConfig | None = None,
     ) -> None:
         self._catalog = catalog
         self._rng = np.random.default_rng(seed)
         self._n_min = n_suppliers_min
         self._n_max = n_suppliers_max
+        self._config = config
         # {sku_id: [SupplierOffer, ...]}
         self._catalogue: dict[str, list[SupplierOffer]] = {}
         self._generate_all()
@@ -110,12 +112,23 @@ class SupplierSimulator:
         """
         po_id = po_dict.get("po_id", str(uuid.uuid4())[:8])
         qty = float(po_dict.get("quantity", 0.0))
+        sku_id = po_dict.get("sku_id")
         base_lead = float(po_dict.get("delivery_window_days", 5.0))
+
+        # Sample stochastic lead time
+        if self._config and hasattr(self._config, 'supplier') and sku_id:
+            rec = self._catalog[sku_id]
+            lt_params = self._config.supplier.lead_time_days.get(rec.category, {"mean": base_lead, "std": 1, "min": 1, "max": 10})
+            sampled_lead = self._rng.normal(lt_params["mean"], lt_params["std"])
+            sampled_lead = np.clip(sampled_lead, lt_params["min"], lt_params["max"])
+            eta_days = int(round(sampled_lead))
+        else:
+            eta_days = int(base_lead)
 
         # Delay
         delayed = self._rng.random() < _DELAY_PROBABILITY
         delay_days = int(self._rng.integers(1, 4)) if delayed else 0
-        eta_days = int(base_lead) + delay_days
+        eta_days += delay_days
 
         # Partial fulfilment
         partial = self._rng.random() < _PARTIAL_PROBABILITY
@@ -136,6 +149,7 @@ class SupplierSimulator:
             "partial_fulfilment": partial,
             "noisy_ack": noisy_ack,
             "delay_days": delay_days,
+            "lead_time_realized": eta_days - delay_days,  # realized before delay
         }
         self._pending_pos[po_id] = {
             "sku_id": po_dict.get("sku_id"),
@@ -213,8 +227,16 @@ class SupplierSimulator:
             for _ in range(n_sup):
                 markup = float(self._rng.uniform(0.90, 1.35))
                 reliability = round(float(self._rng.uniform(0.65, 0.99)), 3)
-                lt_mean = round(float(self._rng.uniform(2.0, 10.0)), 1)
-                lt_std = round(float(self._rng.uniform(0.3, 2.0)), 2)
+                
+                # Use config lead times if available
+                if self._config and hasattr(self._config, 'supplier'):
+                    lt_params = self._config.supplier.lead_time_days.get(rec.category, {"mean": 5, "std": 1, "min": 3, "max": 10})
+                    lt_mean = lt_params["mean"]
+                    lt_std = lt_params["std"]
+                else:
+                    lt_mean = round(float(self._rng.uniform(2.0, 10.0)), 1)
+                    lt_std = round(float(self._rng.uniform(0.3, 2.0)), 2)
+                
                 moq = int(self._rng.choice([5, 10, 20, 50, 100]))
                 country = str(self._rng.choice(self.COUNTRIES))
                 offers.append(
