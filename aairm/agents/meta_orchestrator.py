@@ -107,7 +107,7 @@ class MetaOrchestrator:
 
         # --- Conceptualization agents ---
         self.c1 = DemandForecastingAgent(fc_cfg, forecaster)
-        self.c2 = ReorderOptimisationAgent(opt_cfg, rl_policy)
+        self.c2 = ReorderOptimisationAgent(config, rl_policy, forecaster, erp_backend)
         self.c3 = SupplierRankingAgent(sup_cfg, supplier_backend)
         self.c4 = NegotiationAgent(llm_cfg)
         self.c5 = GovernanceAgent(

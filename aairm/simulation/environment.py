@@ -222,6 +222,17 @@ class RetailEnv:
         if self._erp is None:
             raise RuntimeError("Call reset() before step_agentic().")
 
+        # Decrement open order position for any receipts arriving today.
+        pending_receipts = self._erp.get_pending_receipts(self._day)
+        for receipt in pending_receipts:
+            sku_id = receipt.get("sku_id", "")
+            received_qty = float(receipt.get("received_qty", 0.0))
+            if sku_id:
+                self.on_order_qty[sku_id] = max(
+                    0.0,
+                    self.on_order_qty.get(sku_id, 0.0) - received_qty,
+                )
+
         self._submit_daily_orders(order_dict)
         realised_demand = self._erp.advance_day(self._day)
 
@@ -248,6 +259,7 @@ class RetailEnv:
         return {
             "day": self._day - 1,
             "total_demand": round(total_demand_today, 2),
+            "realised_demand": realised_demand,  # Add per-SKU demand for safety stock update
             "fulfilled_units": round(fulfilled_units, 2),
             "stockout_units": round(stockout_units, 2),
             "expired_units": round(float(day_metrics.get("expired_units", 0.0)), 2),
@@ -500,6 +512,7 @@ class RetailEnv:
             qty_f = float(max(0.0, qty))
             if qty_f <= 0.0:
                 continue
+            self.on_order_qty[sku_id] = self.on_order_qty.get(sku_id, 0.0) + qty_f
             offers = self.query_catalogue(sku_id)
             if not offers:
                 continue

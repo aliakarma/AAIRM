@@ -188,7 +188,12 @@ class Benchmarker:
             state = self._orch.run_cycle(state)
 
             # Step environment with approved orders
-            metrics = env.step_agentic({})
+            metrics = env.step_agentic(state.approved_orders)
+
+            # Update safety stock calculator with actual demand
+            realised_demand = metrics.get("realised_demand", {})
+            for sku_id, demand in realised_demand.items():
+                self._orch.c2.replenishment_agent.update_demand(sku_id, demand)
 
             snap = env.get_inventory_snapshot()
             day_demand = metrics.get("total_demand", 0.0)

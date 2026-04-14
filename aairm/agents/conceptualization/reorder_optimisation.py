@@ -28,8 +28,8 @@ from typing import Any
 import numpy as np
 
 from aairm.agents.base import AgentState, BaseAgent
-from aairm.utils.config import OptimisationConfig
-from aairm.utils.math_utils import expected_cost_single_period
+from aairm.agents.replenishment import ReplenishmentAgent
+from aairm.utils.config import AAIRMConfig
 
 
 class ReorderOptimisationAgent(BaseAgent):
@@ -44,18 +44,26 @@ class ReorderOptimisationAgent(BaseAgent):
 
     def __init__(
         self,
-        config: OptimisationConfig,
+        config: AAIRMConfig,
         rl_policy: Any = None,
+        forecaster: Any = None,
+        erp_backend: Any = None,
     ) -> None:
-        super().__init__("C2", config)
-        self._original_mode: str = config.mode
-        self._mode: str = config.mode if (config.mode == "rl" and rl_policy is not None) else "analytical"
+        super().__init__("C2", config.optimisation)
+        self._config = config  # Store full config for ReplenishmentAgent
+        self._forecaster = forecaster  # Store forecaster
+        self._erp_backend = erp_backend  # Store ERP backend for on_order_qty
+        self._original_mode: str = config.optimisation.mode
+        self._mode: str = config.optimisation.mode if (config.optimisation.mode == "rl" and rl_policy is not None) else "analytical"
         self._policy = rl_policy
-        self._budget: float = config.budget
-        self._capacity: float = config.warehouse_capacity
-        self._h_rate: float = config.holding_cost_rate
-        self._penalty_mult: float = config.penalty_cost_multiplier
-        self._min_order_quantity: float = config.min_order_quantity
+        self._budget: float = config.optimisation.budget
+        self._capacity: float = config.optimisation.warehouse_capacity
+        self._h_rate: float = config.optimisation.holding_cost_rate
+        self._penalty_mult: float = config.optimisation.penalty_cost_multiplier
+        self._min_order_quantity: float = config.optimisation.min_order_quantity
+
+        # Instantiate ReplenishmentAgent
+        self.replenishment_agent = ReplenishmentAgent(config)
 
     def run(self, state: AgentState) -> AgentState:
         """Compute optimal order quantities for all low-stock and candidate SKUs.
@@ -189,12 +197,18 @@ class ReorderOptimisationAgent(BaseAgent):
                         error=str(exc),
                     )
             else:
-                # Analytical mode
-                q_star = self._rule_based_q(
+                # Analytical mode: use ReplenishmentAgent
+                current_inventory = float(rec.get("effective_available", 0.0))
+                on_order_qty = float(self._erp_backend.on_order_qty.get(sku_id, 0.0)) if self._erp_backend else 0.0
+                category = str(rec.get("category", "grocery"))
+                lead_time_days = float(rec.get("lead_time_days", 5.0))
+                q_star = self.replenishment_agent.compute_order_quantity(
                     sku_id=sku_id,
-                    demand_mean=demand_mean,
-                    lead_time=lead_time,
-                    minimum_order_qty=minimum_order_qty,
+                    current_inventory=current_inventory,
+                    on_order_qty=on_order_qty,
+                    lead_time_days=lead_time_days,
+                    forecaster=self._forecaster,
+                    category=category,
                 )
 
             # Minimum order quantity safeguard

@@ -293,6 +293,16 @@ def run_single_experiment(config: AAIRMConfig, reward_tuning: dict[str, float], 
         rl_policy=rl_policy,
     )
 
+    # Verify new replenishment logic is active
+    test_agent = orchestrator.c2.replenishment_agent
+    assert hasattr(test_agent, "safety_stock_calc"), \
+        "OLD ReplenishmentAgent in use — SafetyStockCalculator not found"
+    assert hasattr(test_agent.safety_stock_calc, "service_level_targets"), \
+        "SafetyStockCalculator missing service_level_targets"
+    assert "grocery" in test_agent.safety_stock_calc.service_level_targets, \
+        "Category targets not loaded from config"
+    print("[WIRING OK] New replenishment agent confirmed active")
+
     # ── Run benchmarker ────────────────────────────────────────────────────
     logger.info("benchmarker.start")
     t0 = time.perf_counter()

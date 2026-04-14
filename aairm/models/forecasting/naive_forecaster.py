@@ -35,6 +35,7 @@ class NaiveForecaster(BaseForecaster):
     def __init__(self, window: int = 7) -> None:
         self._window = window
         self._fitted = False
+        self._demand_history: dict[str, np.ndarray] = {}
 
     def fit(
         self,
@@ -50,8 +51,22 @@ class NaiveForecaster(BaseForecaster):
         Returns:
             Self.
         """
+        self._demand_history = {
+            sku_id: np.asarray(series, dtype=float)
+            for sku_id, series in demand_history.items()
+        }
         self._fitted = True
         return self
+
+    def predict_total_demand(self, sku_id: str, n_days: int) -> float:
+        """Return expected total demand for the next n_days."""
+        history = self._demand_history.get(sku_id)
+        if history is None or len(history) == 0:
+            return 0.0
+
+        recent = history[-self._window :] if len(history) >= self._window else history
+        mean_daily = float(np.mean(recent))
+        return float(mean_daily * n_days)
 
     def predict(
         self,
