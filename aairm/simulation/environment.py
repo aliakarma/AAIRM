@@ -84,6 +84,8 @@ class RetailEnv:
         self._gen: DemandGenerator | None = None
         self._sup: SupplierSimulator | None = None
         self._erp: ERPStub | None = None
+        self.on_order: dict[str, float] = {}
+        self.replenishment_agent: Any | None = None
 
         # Current day
         self._day: int = 0
@@ -145,6 +147,7 @@ class RetailEnv:
         self._total_fulfilled = {s: 0.0 for s in self._catalog.sku_ids}  # type: ignore[union-attr]
         self._total_cost = 0.0
         self._daily_on_hand = []
+        self.on_order = {s: 0.0 for s in self._catalog.sku_ids}  # type: ignore[union-attr]
 
         obs = self._get_obs()
         info = {"day": 0, "n_skus": len(self._catalog.sku_ids)}  # type: ignore[union-attr]
@@ -213,8 +216,35 @@ class RetailEnv:
         if self._erp is None:
             raise RuntimeError("Call reset() before step_agentic().")
 
+        # Decrement outstanding on-order quantities for receipts arriving today.
+        if hasattr(self, "on_order") and self._erp is not None:
+            for receipt in self._erp.get_pending_receipts(self._day):
+                sku_id = receipt.get("sku_id", "")
+                received_qty = float(receipt.get("received_qty", 0.0))
+                if sku_id:
+                    self.on_order[sku_id] = max(
+                        0.0,
+                        self.on_order.get(sku_id, 0.0) - received_qty,
+                    )
+
         self._submit_daily_orders(order_dict)
         realised_demand = self._erp.advance_day(self._day)
+
+        # Feed real-unit demand into safety stock rolling history.
+        if hasattr(self, "replenishment_agent") and self.replenishment_agent is not None:
+            if hasattr(self.replenishment_agent, "safety_stock_calc"):
+                for sku_id, sku_demand in realised_demand.items():
+                    category = self._catalog[sku_id].category if self._catalog else "grocery"
+                    self.replenishment_agent.safety_stock_calc.set_category(sku_id, category)
+                    self.replenishment_agent.safety_stock_calc.update(
+                        sku_id, float(sku_demand)
+                    )
+                logger.info(
+                    "safety_stock_wired",
+                    n_skus=len(realised_demand),
+                    sample_sku=next(iter(realised_demand)),
+                    sample_demand=next(iter(realised_demand.values())),
+                )
 
         snapshot = self._erp.get_inventory_snapshot()
         day_metrics = self._erp.get_last_day_metrics()
@@ -243,6 +273,7 @@ class RetailEnv:
             "stockout_units": round(stockout_units, 2),
             "expired_units": round(float(day_metrics.get("expired_units", 0.0)), 2),
             "ordering_cost": round(float(day_metrics.get("ordering_cost", 0.0)), 2),
+            "total_on_order": round(sum(self.on_order.values()), 2),
             "reward": round(reward, 4),
             "collapse": bool(collapse),
         }
@@ -519,6 +550,7 @@ class RetailEnv:
                 "delivery_window_days": resolved_lead_time,
                 "day": day,
             }
+            self.on_order[sku_id] = self.on_order.get(sku_id, 0.0) + qty_f
             conf = self.submit_purchase_order(po_dict)
             eta_days = int(conf.get("eta_days", po_dict["delivery_window_days"]))
             self.create_purchase_order(po_dict)

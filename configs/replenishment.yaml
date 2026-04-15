@@ -1,12 +1,17 @@
 replenishment:
   service_level_targets:
-    grocery: 0.95
+    grocery: 0.97
     frozen_food: 0.95
-    apparel: 0.95
+    apparel: 0.93
     cosmetics: 0.95
     dry_fruits: 0.95
   min_order_qty: 50.0
-  max_order_days_supply: 30
+  max_order_days_supply:
+    grocery: 10
+    frozen_food: 7
+    apparel: 30
+    cosmetics: 30
+    dry_fruits: 30
   review_period_days:
     grocery: 5
     frozen_food: 5

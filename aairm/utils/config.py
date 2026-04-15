@@ -174,6 +174,53 @@ class OptimisationConfig(BaseSettings):
         description="Number of PPO epochs per update.")
 
 
+class ReplenishmentConfig(BaseSettings):
+    """Category-aware replenishment configuration."""
+
+    model_config = SettingsConfigDict(env_prefix="AAIRM_REPLENISH_")
+
+    service_level_targets: dict[str, float] = Field(
+        default_factory=lambda: {
+            "grocery": 0.95,
+            "frozen_food": 0.95,
+            "apparel": 0.95,
+            "cosmetics": 0.95,
+            "dry_fruits": 0.95,
+        },
+        description="Category-specific service level targets for safety stock.",
+    )
+    min_order_qty: float = Field(
+        50.0,
+        ge=0.0,
+        description="Minimum order quantity safeguard."
+    )
+    max_order_days_supply: dict[str, float] = Field(
+        default_factory=lambda: {
+            "grocery": 30.0,
+            "frozen_food": 30.0,
+            "apparel": 30.0,
+            "cosmetics": 30.0,
+            "dry_fruits": 30.0,
+        },
+        description="Maximum days supply allowed for each category.",
+    )
+    review_period_days: dict[str, int] = Field(
+        default_factory=lambda: {
+            "grocery": 3,
+            "frozen_food": 3,
+            "apparel": 7,
+            "cosmetics": 7,
+            "dry_fruits": 5,
+        },
+        description="Review period in days used for target stock calculation.",
+    )
+    warm_up_days: int = Field(
+        30,
+        ge=0,
+        description="Warm-up days used for demand history before test evaluation.",
+    )
+
+
 class SupplierRankingConfig(BaseSettings):
     """Supplier Ranking Agent (C3) weight parameters (paper Eq. 6)."""
 
@@ -279,6 +326,7 @@ class AAIRMConfig(BaseSettings):
     simulation: SimulationConfig = Field(default_factory=SimulationConfig)
     forecasting: ForecastingConfig = Field(default_factory=ForecastingConfig)
     optimisation: OptimisationConfig = Field(default_factory=OptimisationConfig)
+    replenishment: ReplenishmentConfig = Field(default_factory=ReplenishmentConfig)
     supplier_ranking: SupplierRankingConfig = Field(default_factory=SupplierRankingConfig)
     governance: GovernanceConfig = Field(default_factory=GovernanceConfig)
     llm: LLMConfig = Field(default_factory=LLMConfig)
