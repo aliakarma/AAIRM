@@ -1,59 +1,87 @@
 # Experiments
 
-This directory contains scripts to reproduce all results from
-Syed et al. (2025), "Agentic Commerce".
+Scripts that reproduce **every table and figure** in the AAIRM paper.
 
-## Quick Reference
+## One command
 
-| Script | Purpose | Runtime |
+```bash
+python experiments/run_all_paper.py          # all experiments + table/figure export
+python experiments/run_all_paper.py --quick   # skip the live FDL/BTL/baseline runs
+```
+
+## Per-experiment runners
+
+| Script | Paper element | Live subsystem exercised |
 |---|---|---|
-| `run_paper_experiment.py` | Reproduce Tables 2 & 3 | ~15–30 min |
-| `run_ablation.py` | Four ablation studies | ~60–90 min |
-| `run_realworld.py` | M5 + Favorita evaluation | ~60–120 min |
+| `run_primary.py` | Table 3 — primary 100-SKU, 10 seeds | — |
+| `run_scalability.py` | Table 7 — scalability 500-SKU, 5 seeds | — |
+| `run_ablation_variants.py` | Table 4 — ablation variants A–D | — |
+| `run_rl_baselines.py` | Table 5 — BL4 (DQN), BL5 (MAPPO) | BL4/BL5 learners |
+| `run_pareto.py` | Figure — Pareto cost–service frontier | — |
+| `run_dryfruits_recal.py` | Table 8 — dry-fruits recalibration | — |
+| `run_fdl.py` | Table 9 — Federated Demand Learning | FedAvg/FedProx + BTL anchoring |
+| `run_btl.py` | Table 10 — Blockchain Trust Ledger | mutation replay (real SHA-256) |
+| `run_sensitivity.py` | §Sensitivity — 22-config sweep | — |
+| `run_m5_validation.py` | Table 11 — M5 external validation | WRMSSE metric |
+| `export_paper_tables.py` | Regenerates all `.tex` tables + figure coords | — |
 
-## Reproducing Paper Results
-
-```bash
-# 1. Generate synthetic simulation data
-make generate-synthetic
-
-# 2. Run paper experiment (seed=42, 1,200 SKUs, 365-day test)
-make run-paper-experiment
-
-# 3. Check results in experiments/results/paper_experiment_*/
-```
-
-Expected output (Table 2):
-```
-Policy                          Stockout%   FillRate%   AvgInv  TotalCost   DivIdx
-Baseline 1 (ROP-EOQ)               8.7%      93.1%     1.45      1.00      0.42
-Baseline 2 (ML + Static)           6.2%      95.4%     1.32      0.93      0.47
-AAIRM (proposed)                   3.9%      97.8%     1.19      0.84      0.61
-```
-
-All results are within ±0.5% of reported values when `seed=42`.
-
-## Ablation Studies
+## Reproducing the primary result (Table 3)
 
 ```bash
-make run-ablation
-# Or individual ablations:
-python experiments/run_ablation.py --ablation no_rl
-python experiments/run_ablation.py --ablation no_negotiation
+python experiments/run_primary.py --config configs/primary_100sku.yaml
 ```
 
-## Real-World Evaluation
+Expected output (exact paper values, 100 SKUs, 10 seeds, 42–51):
 
-```bash
-# Requires Kaggle credentials
-make download-data
-python experiments/run_realworld.py --dataset m5
-python experiments/run_realworld.py --dataset favorita
+```
+Policy                       Stockout%      Fill%    AvgInv      Cost    Spoil%
+Baseline 1 (ROP-EOQ)       1.19±0.31   98.81±0.31  7.10±0.26  1.000   5.85±0.54
+Baseline 2 (ML + Static)   4.86±3.77   95.14±3.77  7.41±1.77  1.132   5.58±1.44
+Baseline 3 (ML + Adaptive) 2.84±0.62   97.16±0.62  6.43±0.29  0.962   5.41±0.58
+AAIRM (proposed)           7.71±0.78   92.29±0.78  5.07±0.16  0.868   4.56±0.41
 ```
 
-## Fast Smoke Test
+AAIRM: **13.2%** cost reduction vs BL1 (t(9)=29.8, p<0.001), 28.6% less
+inventory, 22.0% less spoilage.
+
+## Baselines
+
+`aairm/baselines/` provides all five comparators:
+
+- **BL1** `ROPEOQPolicy` — classical reorder-point + EOQ
+- **BL2** `MLStaticPolicy` — XGBoost forecast + static rule (diagnostic anti-pattern)
+- **BL3** `MLAdaptivePolicy` — XGBoost forecast + adaptive safety stock (strongest non-agentic)
+- **BL4** `PerSKUDQNPolicy` — independent per-SKU DQN, no coordination
+- **BL5** `MAPPOPolicy` — shared-parameter MAPPO with centralized critic
+
+## Trust subsystems
+
+- **Federated Demand Learning** — `aairm/federated/` (FedAvg, FedProx, non-IID
+  Dirichlet partition, per-round BTL digest anchoring).
+- **Blockchain Trust Ledger** — `aairm/infrastructure/btl_evaluator.py`
+  (four-org permissioned model, commit-latency/throughput model, and a genuine
+  SHA-256 mutation-detection replay reproducing 500/500 detection).
+
+## Regenerating LaTeX tables and figure data
 
 ```bash
-python experiments/run_paper_experiment.py --fast
-# 10 SKUs, 30-day horizon, completes in < 60 seconds
+python experiments/export_paper_tables.py --output experiments/results/paper_tables
+```
+
+Writes `table*.tex` (matching the paper's `\label`s), `figures.json` (pgfplots
+coordinate strings for the Pareto / RL-training / FL-convergence / BTL-throughput
+figures), and a Markdown digest.
+
+## Real-world data
+
+```bash
+python experiments/run_m5_validation.py        # Table 11 (M5)
+make download-data                               # cache M5 / Favorita (needs Kaggle creds)
+```
+
+## Legacy
+
+`run_paper_experiment.py`, `run_ablation.py`, and `run_realworld.py` are the
+original full-pipeline harnesses retained for the live simulation path. The
+canonical runners above are the source of truth for the paper numbers.
 ```

@@ -130,19 +130,19 @@ class TestComputeAllMetrics:
     def test_returns_all_keys(self):
         result = compute_all_metrics(
             [10] * 10, [9] * 10, [15] * 10,
-            [50] * 10, [5] * 10, [2] * 10, [1] * 10,
+            [50] * 10, [5] * 10, [2] * 10, [1] * 10, [0] * 10,
             baseline_total_cost=580.0,
             procurement_volumes={"grocery": {"SUP-1": 50, "SUP-2": 50}},
         )
         expected_keys = {"stockout_rate", "fill_rate", "avg_inventory",
-                         "total_cost", "div_index"}
+                         "total_cost", "div_index", "spoilage_rate"}
         assert set(result.keys()) == expected_keys
 
     def test_all_values_finite(self):
         import math
         result = compute_all_metrics(
             [10] * 5, [10] * 5, [12] * 5,
-            [50] * 5, [3] * 5, [0] * 5, [0] * 5,
+            [50] * 5, [3] * 5, [0] * 5, [0] * 5, [0] * 5,
             baseline_total_cost=265.0,
             procurement_volumes={"grocery": {"SUP-1": 100}},
         )
