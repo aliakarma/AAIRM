@@ -1,0 +1,66 @@
+{
+  "table": "tab:results-overview",
+  "title": "Overall performance comparison on the 100-SKU primary evaluation (10 seeds, 42-51). Total cost normalized to Baseline 1 per seed.",
+  "scale": "100-SKU",
+  "n_skus": 100,
+  "seeds": [42, 43, 44, 45, 46, 47, 48, 49, 50, 51],
+  "n_seeds": 10,
+  "metric_units": {
+    "stockout_rate": "%",
+    "fill_rate": "%",
+    "avg_inventory": "units/SKU",
+    "total_cost": "normalized to BL1",
+    "spoilage_rate": "%"
+  },
+  "policies": {
+    "baseline1": {
+      "label": "Baseline 1 (ROP-EOQ)",
+      "stockout_rate": {"mean": 1.19, "std": 0.31},
+      "fill_rate": {"mean": 98.81, "std": 0.31},
+      "avg_inventory": {"mean": 7.10, "std": 0.26},
+      "total_cost": {"mean": 1.000, "std": 0.000},
+      "spoilage_rate": {"mean": 5.85, "std": 0.54}
+    },
+    "baseline2": {
+      "label": "Baseline 2 (ML + Static)",
+      "stockout_rate": {"mean": 4.86, "std": 3.77},
+      "fill_rate": {"mean": 95.14, "std": 3.77},
+      "avg_inventory": {"mean": 7.41, "std": 1.77},
+      "total_cost": {"mean": 1.132, "std": 0.118},
+      "spoilage_rate": {"mean": 5.58, "std": 1.44}
+    },
+    "baseline3": {
+      "label": "Baseline 3 (ML + Adaptive)",
+      "stockout_rate": {"mean": 2.84, "std": 0.62},
+      "fill_rate": {"mean": 97.16, "std": 0.62},
+      "avg_inventory": {"mean": 6.43, "std": 0.29},
+      "total_cost": {"mean": 0.962, "std": 0.031},
+      "spoilage_rate": {"mean": 5.41, "std": 0.58}
+    },
+    "aairm": {
+      "label": "AAIRM (proposed)",
+      "stockout_rate": {"mean": 7.71, "std": 0.78},
+      "fill_rate": {"mean": 92.29, "std": 0.78},
+      "avg_inventory": {"mean": 5.07, "std": 0.16},
+      "total_cost": {"mean": 0.868, "std": 0.014},
+      "spoilage_rate": {"mean": 4.56, "std": 0.41},
+      "best": ["avg_inventory", "total_cost", "spoilage_rate"]
+    }
+  },
+  "derived": {
+    "cost_reduction_vs_bl1_pct": 13.2,
+    "cost_reduction_vs_bl2_pct": 23.3,
+    "cost_gap_to_bl3_pct": 9.8,
+    "avg_inventory_reduction_vs_bl1_pct": 28.6,
+    "spoilage_reduction_vs_bl1_pct": 22.0,
+    "cost_std_ratio_bl2_over_aairm": 8.43,
+    "aairm_cost_range": [0.852, 0.899],
+    "aairm_stockout_range": [6.34, 8.73]
+  },
+  "statistics": {
+    "aairm_vs_bl1": {"t": 29.8, "df": 9, "p": "<0.001", "holm_corrected": true},
+    "aairm_vs_bl2": {"t": 6.83, "df": 9, "p": "<0.001", "holm_corrected": true},
+    "aairm_vs_bl3": {"t": 9.12, "df": 9, "p": "<0.001", "holm_corrected": true},
+    "shapiro_wilk": {"W_min": 0.91, "p_min": 0.28, "alpha": 0.05}
+  }
+}

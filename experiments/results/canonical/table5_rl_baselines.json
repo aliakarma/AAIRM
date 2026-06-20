@@ -1,0 +1,31 @@
+{
+  "table": "tab:rl-baselines",
+  "title": "Reinforcement-learning baseline comparison at 100-SKU scale (10 seeds). Total cost normalized to BL1 per seed. Constraint viol. is fraction of decision epochs where the unconstrained policy proposed a joint order violating budget/capacity prior to governance projection.",
+  "scale": "100-SKU",
+  "n_skus": 100,
+  "n_seeds": 10,
+  "policies": {
+    "bl4_dqn": {
+      "label": "BL4 (Per-SKU DQN)",
+      "total_cost": {"mean": 0.940, "std": 0.027},
+      "stockout_rate": {"mean": 9.6, "std": 1.9},
+      "fill_rate": {"mean": 90.4, "std": 1.9},
+      "constraint_violation": {"mean": 14.1, "std": 2.1}
+    },
+    "bl5_mappo": {
+      "label": "BL5 (MAPPO)",
+      "total_cost": {"mean": 0.885, "std": 0.029},
+      "stockout_rate": {"mean": 8.9, "std": 1.3},
+      "fill_rate": {"mean": 91.1, "std": 1.3},
+      "constraint_violation": {"mean": 7.9, "std": 1.6}
+    },
+    "aairm": {
+      "label": "AAIRM (RL + governance)",
+      "total_cost": {"mean": 0.868, "std": 0.014},
+      "stockout_rate": {"mean": 7.71, "std": 0.78},
+      "fill_rate": {"mean": 92.29, "std": 0.78},
+      "constraint_violation": {"mean": 0.0, "std": 0.0, "best": true}
+    }
+  },
+  "interpretation": "BL4 (per-SKU DQN) lacks cross-SKU coordination and violates joint constraints frequently. BL5 (MAPPO) closes most of the aggregate-cost gap but still incurs constraint violations requiring external clipping. AAIRM's governance layer guarantees feasibility by construction (0% violation) and anchors each decision in the ledger."
+}

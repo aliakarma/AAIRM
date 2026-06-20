@@ -1,0 +1,32 @@
+{
+  "table": "tab:fdl-results",
+  "title": "Federated Demand Learning evaluation at 100-SKU scale across K=8 non-IID stores (10 seeds). WAPE is held-out forecast error; downstream cost is normalized total cost of the full AAIRM pipeline using each forecaster.",
+  "scale": "100-SKU",
+  "n_skus": 100,
+  "n_stores": 8,
+  "n_seeds": 10,
+  "dirichlet_beta": 0.5,
+  "communication_rounds": 60,
+  "local_epochs": 2,
+  "fedprox_mu": 0.01,
+  "regimes": {
+    "centralized": {"label": "Centralized (pooled)", "wape": {"mean": 18.4, "std": 0.6}, "downstream_cost": {"mean": 0.868, "std": 0.014}, "raw_data_leaves_store": true},
+    "fedprox": {"label": "FedProx (mu=0.01)", "wape": {"mean": 19.3, "std": 0.7}, "downstream_cost": {"mean": 0.881, "std": 0.016}, "raw_data_leaves_store": false},
+    "fedavg": {"label": "FedAvg", "wape": {"mean": 19.8, "std": 0.8}, "downstream_cost": {"mean": 0.886, "std": 0.018}, "raw_data_leaves_store": false},
+    "local_only": {"label": "Local-only", "wape": {"mean": 24.7, "std": 1.4}, "downstream_cost": {"mean": 0.917, "std": 0.023}, "raw_data_leaves_store": false}
+  },
+  "communication": {
+    "forecaster_params_millions": 1.9,
+    "mb_per_round_per_store": 7.6,
+    "rounds": 60,
+    "wallclock_minutes": "<25"
+  },
+  "convergence_figure": {
+    "label": "fig:fl-convergence",
+    "xlabel": "Communication round",
+    "ylabel": "Held-out WAPE (%)",
+    "fedavg": [[1, 33.0], [5, 27.8], [10, 24.9], [15, 23.1], [20, 22.0], [25, 21.3], [30, 20.8], [35, 20.5], [40, 20.2], [45, 20.1], [50, 19.9], [55, 19.9], [60, 19.8]],
+    "fedprox": [[1, 32.6], [5, 26.9], [10, 23.8], [15, 22.2], [20, 21.2], [25, 20.5], [30, 20.1], [35, 19.8], [40, 19.6], [45, 19.5], [50, 19.4], [55, 19.3], [60, 19.3]],
+    "centralized_reference": 18.4
+  }
+}

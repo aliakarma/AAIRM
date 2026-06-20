@@ -1,0 +1,24 @@
+# ===========================================================================
+# Ablation Variant B (Governance-only) — product.tex Table 4 (tab:ablation)
+# ===========================================================================
+# Governance (C5) and supplier ranking (C3) operate WITH the LLM orchestrator,
+# but the RL policy is replaced by the classical ROP-EOQ ordering rule (BL1).
+# Canonical: total_cost 0.978 +/- 0.022, stockout 2.15%, avg_inv 6.71.
+
+base_config: configs/primary_100sku.yaml
+
+ablation:
+  variant: B
+  name: gov_only
+  use_llm_orchestrator: true
+  enable_governance: true           # C5 active
+  enable_negotiation: true
+  supplier_selection: ranked        # C3 active
+  use_rl_policy: false              # ROP-EOQ replaces PPO C2
+
+optimisation:
+  mode: analytical                  # classical ordering rule
+
+canonical_fixture: table4_ablation
+canonical_key: B
+results_dir: experiments/results/ablation/variant_b_gov_only

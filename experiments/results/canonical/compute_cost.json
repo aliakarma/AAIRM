@@ -1,0 +1,18 @@
+{
+  "section": "sec:compute",
+  "title": "Per-decision computational cost and wall-clock training time at both scales.",
+  "decision_latency": {
+    "100_sku": {"mean_s": 3.2, "llm_inference_s": 1.8, "tool_routing_calls": 4.3, "with_async_btl_s": 3.41},
+    "500_sku": {"mean_s": 8.7}
+  },
+  "llm_cost": {
+    "model": "GPT-4o-mini (OpenAI, 2024-05)",
+    "cost_per_decision_usd": 0.003,
+    "annual_cost_usd_at_1000_per_day": 1100
+  },
+  "wallclock_training": {
+    "100_sku_hours_per_seed": 4.2,
+    "500_sku_hours_per_seed": 22.8,
+    "hardware": "AMD EPYC 7763 (64 cores), 256 GB RAM, NVIDIA A100 (40 GB)"
+  }
+}

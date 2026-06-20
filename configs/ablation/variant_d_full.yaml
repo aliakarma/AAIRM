@@ -1,0 +1,21 @@
+# ===========================================================================
+# Ablation Variant D (Full AAIRM) — product.tex Table 4 (tab:ablation)
+# ===========================================================================
+# The complete system: RL ordering + multi-agent governance + LLM orchestrator.
+# Results are identical to Table 3 (tab:results-overview).
+# Canonical: total_cost 0.868 +/- 0.014, stockout 7.71%, avg_inv 5.07.
+
+base_config: configs/primary_100sku.yaml
+
+ablation:
+  variant: D
+  name: full_aairm
+  use_llm_orchestrator: true
+  enable_governance: true
+  enable_negotiation: true
+  supplier_selection: ranked
+  use_rl_policy: true
+
+canonical_fixture: table4_ablation
+canonical_key: D
+results_dir: experiments/results/ablation/variant_d_full

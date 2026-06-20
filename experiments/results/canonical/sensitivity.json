@@ -1,0 +1,21 @@
+{
+  "section": "sec:sensitivity",
+  "title": "Hyperparameter sensitivity sweep at 100 SKUs (10 seeds per setting). For every perturbed configuration, normalized total cost stays within the reported range; no perturbation changes the ordering of AAIRM vs any baseline.",
+  "scale": "100-SKU",
+  "n_seeds": 10,
+  "n_perturbed_configs": 22,
+  "baseline_cost": 0.868,
+  "cost_range": [0.861, 0.883],
+  "max_deviation_pct": 1.3,
+  "sweeps": {
+    "learning_rate": [1e-4, 2e-4, 4e-4],
+    "clip_ratio": [0.1, 0.2, 0.3],
+    "entropy_coefficient": [0.01, 0.02, 0.04],
+    "supplier_weights_delta": "+/-0.05 each alpha_m (renormalized)"
+  },
+  "largest_sensitivity": {
+    "parameter": "entropy_coefficient",
+    "value": 0.01,
+    "effect": "2 of 10 seeds converge to higher-cost local optima"
+  }
+}

@@ -1,0 +1,39 @@
+{
+  "table": "tab:category-results-100",
+  "title": "Per-category performance comparison at 100-SKU scale, averaged over 10 seeds (42-51). Stockout/fill in %; avg inventory in units/SKU; spoilage in % of procured units. N/A = non-perishable categories with zero spoilage.",
+  "scale": "100-SKU",
+  "n_skus": 100,
+  "n_seeds": 10,
+  "categories": {
+    "grocery": {
+      "perishable": false,
+      "baseline1": {"stockout_rate": {"mean": 1.16, "std": 0.44}, "fill_rate": {"mean": 98.84, "std": 0.44}, "avg_inventory": {"mean": 6.99, "std": 0.39}, "spoilage_rate": null},
+      "baseline2": {"stockout_rate": {"mean": 9.32, "std": 5.93}, "fill_rate": {"mean": 90.68, "std": 5.93}, "avg_inventory": {"mean": 3.74, "std": 0.66}, "spoilage_rate": null},
+      "aairm": {"stockout_rate": {"mean": 9.13, "std": 1.29}, "fill_rate": {"mean": 90.87, "std": 1.29}, "avg_inventory": {"mean": 4.40, "std": 0.32}, "spoilage_rate": null}
+    },
+    "frozen_food": {
+      "perishable": true,
+      "baseline1": {"stockout_rate": {"mean": 1.18, "std": 0.68}, "fill_rate": {"mean": 98.82, "std": 0.68}, "avg_inventory": {"mean": 8.26, "std": 0.40}, "spoilage_rate": {"mean": 6.93, "std": 1.04}},
+      "baseline2": {"stockout_rate": {"mean": 1.14, "std": 2.62, "note": "right-skewed; std exceeds mean"}, "fill_rate": {"mean": 98.86, "std": 2.62}, "avg_inventory": {"mean": 10.23, "std": 2.85}, "spoilage_rate": {"mean": 8.87, "std": 3.00}},
+      "aairm": {"stockout_rate": {"mean": 6.62, "std": 1.59}, "fill_rate": {"mean": 93.38, "std": 1.59}, "avg_inventory": {"mean": 5.78, "std": 0.31}, "spoilage_rate": {"mean": 5.18, "std": 0.82}}
+    },
+    "apparel": {
+      "perishable": false,
+      "baseline1": {"stockout_rate": {"mean": 0.35, "std": 0.30}, "fill_rate": {"mean": 99.65, "std": 0.30}, "avg_inventory": {"mean": 11.15, "std": 0.48}, "spoilage_rate": null},
+      "baseline2": {"stockout_rate": {"mean": 0.00, "std": 0.00}, "fill_rate": {"mean": 100.00, "std": 0.00}, "avg_inventory": {"mean": 25.60, "std": 8.51}, "spoilage_rate": null},
+      "aairm": {"stockout_rate": {"mean": 3.54, "std": 1.14}, "fill_rate": {"mean": 96.46, "std": 1.14}, "avg_inventory": {"mean": 8.44, "std": 0.23}, "spoilage_rate": null}
+    },
+    "cosmetics": {
+      "perishable": true,
+      "baseline1": {"stockout_rate": {"mean": 1.06, "std": 0.66}, "fill_rate": {"mean": 98.94, "std": 0.66}, "avg_inventory": {"mean": 7.47, "std": 0.57}, "spoilage_rate": {"mean": 5.30, "std": 0.79}},
+      "baseline2": {"stockout_rate": {"mean": 0.61, "std": 1.21}, "fill_rate": {"mean": 99.39, "std": 1.21}, "avg_inventory": {"mean": 10.88, "std": 3.34}, "spoilage_rate": {"mean": 7.87, "std": 2.42}},
+      "aairm": {"stockout_rate": {"mean": 7.41, "std": 2.61}, "fill_rate": {"mean": 92.59, "std": 2.61}, "avg_inventory": {"mean": 5.16, "std": 0.37}, "spoilage_rate": {"mean": 3.92, "std": 0.34}}
+    },
+    "dry_fruits": {
+      "perishable": true,
+      "baseline1": {"stockout_rate": {"mean": 1.51, "std": 0.76}, "fill_rate": {"mean": 98.49, "std": 0.76}, "avg_inventory": {"mean": 6.29, "std": 0.62}, "spoilage_rate": {"mean": 15.20, "std": 1.84}},
+      "baseline2": {"stockout_rate": {"mean": 4.70, "std": 4.33}, "fill_rate": {"mean": 95.30, "std": 4.33}, "avg_inventory": {"mean": 4.83, "std": 1.08}, "spoilage_rate": {"mean": 11.62, "std": 2.92}},
+      "aairm": {"stockout_rate": {"mean": 7.75, "std": 2.44}, "fill_rate": {"mean": 92.25, "std": 2.44}, "avg_inventory": {"mean": 4.50, "std": 0.33}, "spoilage_rate": {"mean": 12.03, "std": 1.32}}
+    }
+  }
+}

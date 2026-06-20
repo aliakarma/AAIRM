@@ -1,0 +1,22 @@
+# ===========================================================================
+# Ablation Variant A (RL-only) — product.tex Table 4 (tab:ablation)
+# ===========================================================================
+# PPO Reorder Optimization Agent with a deterministic rule-based orchestrator
+# replacing the LLM Meta-Orchestrator; governance (C5) DISABLED; supplier
+# selection uses a fixed lowest-cost rule.
+# Canonical: total_cost 0.912 +/- 0.019, stockout 6.93%, avg_inv 5.42.
+
+base_config: configs/primary_100sku.yaml
+
+ablation:
+  variant: A
+  name: rl_only
+  use_llm_orchestrator: false       # deterministic rule-based router
+  enable_governance: false          # C5 disabled
+  enable_negotiation: false
+  supplier_selection: lowest_cost   # fixed rule, no C3 ranking
+  use_rl_policy: true               # PPO C2 active
+
+canonical_fixture: table4_ablation
+canonical_key: A
+results_dir: experiments/results/ablation/variant_a_rl_only

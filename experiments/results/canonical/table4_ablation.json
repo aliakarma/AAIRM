@@ -1,0 +1,59 @@
+{
+  "table": "tab:ablation",
+  "title": "Ablation study at 100-SKU scale (10 seeds). Total cost normalized to BL1 per seed. p-value is Holm-corrected paired t-test of each variant vs full AAIRM (Variant D).",
+  "scale": "100-SKU",
+  "n_skus": 100,
+  "n_seeds": 10,
+  "variants": {
+    "A": {
+      "label": "A (RL-only)",
+      "description": "PPO Reorder Optimization Agent with deterministic rule-based orchestrator; governance (C5) disabled; supplier selection fixed lowest-cost.",
+      "total_cost": {"mean": 0.912, "std": 0.019},
+      "stockout_rate": {"mean": 6.93, "std": 0.91},
+      "avg_inventory": {"mean": 5.42, "std": 0.19},
+      "p_vs_D": "<0.001"
+    },
+    "B": {
+      "label": "B (Gov.-only)",
+      "description": "Governance (C5) and supplier ranking (C3) with LLM orchestrator; RL policy replaced by classical ROP-EOQ.",
+      "total_cost": {"mean": 0.978, "std": 0.022},
+      "stockout_rate": {"mean": 2.15, "std": 0.48},
+      "avg_inventory": {"mean": 6.71, "std": 0.24},
+      "p_vs_D": "<0.001"
+    },
+    "C": {
+      "label": "C (No-LLM)",
+      "description": "Full pipeline with RL ordering and governance; LLM orchestrator replaced by deterministic rule-based task router.",
+      "total_cost": {"mean": 0.874, "std": 0.016},
+      "stockout_rate": {"mean": 7.54, "std": 0.82},
+      "avg_inventory": {"mean": 5.12, "std": 0.17},
+      "p_vs_D": "0.38"
+    },
+    "D": {
+      "label": "D (Full AAIRM)",
+      "description": "Complete system; identical to Table tab:results-overview.",
+      "total_cost": {"mean": 0.868, "std": 0.014},
+      "stockout_rate": {"mean": 7.71, "std": 0.78},
+      "avg_inventory": {"mean": 5.07, "std": 0.16},
+      "p_vs_D": "---"
+    }
+  },
+  "decomposition": {
+    "rl_contribution_pp": 8.8,
+    "governance_contribution_pp": 3.8,
+    "llm_contribution_pp": 0.6,
+    "governance_plus_llm_pp": 4.4,
+    "total_pp": 13.2,
+    "rl_from": "BL1 (1.000) -> A (0.912)",
+    "governance_from": "A (0.912) -> C (0.874)",
+    "llm_from": "C (0.874) -> D (0.868)"
+  },
+  "llm_null_result": {
+    "delta": 0.006,
+    "delta_pp": 0.6,
+    "p": 0.38,
+    "tost_margin_pp": 2.0,
+    "tost_p": "<0.05",
+    "conclusion": "practical equivalence: LLM orchestrator adds no economically meaningful value in structured procurement"
+  }
+}

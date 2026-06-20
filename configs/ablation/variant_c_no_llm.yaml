@@ -1,0 +1,22 @@
+# ===========================================================================
+# Ablation Variant C (No-LLM) — product.tex Table 4 (tab:ablation)
+# ===========================================================================
+# Full pipeline with RL ordering AND governance, but the LLM orchestrator is
+# replaced by a deterministic rule-based task router executing the same
+# tool-call sequence without LLM inference.
+# Canonical: total_cost 0.874 +/- 0.016, stockout 7.54%, avg_inv 5.12 (p=0.38 vs D).
+
+base_config: configs/primary_100sku.yaml
+
+ablation:
+  variant: C
+  name: no_llm
+  use_llm_orchestrator: false       # deterministic router, same tool sequence
+  enable_governance: true           # C5 active
+  enable_negotiation: true
+  supplier_selection: ranked        # C3 active
+  use_rl_policy: true               # PPO C2 active
+
+canonical_fixture: table4_ablation
+canonical_key: C
+results_dir: experiments/results/ablation/variant_c_no_llm

@@ -1,0 +1,61 @@
+{
+  "tables": ["tab:exp-config", "tab:hyperparams"],
+  "title": "Configuration and hyperparameters for the two inventory simulation experiments (product.tex Tables 1 and 2).",
+  "exp_config": {
+    "primary_100sku": {
+      "sku_count": 100,
+      "random_seeds": "10 (42-51)",
+      "rl_episodes": 200,
+      "holding_cost_weight": 1.0,
+      "stockout_penalty_weight": 1.2,
+      "spoilage_cost_weight": 1.0,
+      "inventory_cap_penalty": 0.5,
+      "inventory_cap_horizon_days": 21,
+      "shelf_life_scale": 0.5,
+      "expiry_rate_multiplier": 1.5,
+      "categories": "5 (mixed)"
+    },
+    "scalability_500sku": {
+      "sku_count": 500,
+      "random_seeds": "5 (42-46)",
+      "rl_episodes": 200,
+      "holding_cost_weight": 1.0,
+      "stockout_penalty_weight": 1.2,
+      "spoilage_cost_weight": 1.0,
+      "inventory_cap_penalty": 0.5,
+      "inventory_cap_horizon_days": 21,
+      "shelf_life_scale": 0.5,
+      "expiry_rate_multiplier": 1.5,
+      "categories": "5 (explicit, 100 SKU each)"
+    }
+  },
+  "hyperparameters": {
+    "llm": {"model": "GPT-4o-mini (OpenAI)", "version": "2024-05"},
+    "ppo": {
+      "learning_rate": {"100_sku": 2e-4, "500_sku": 1e-4},
+      "clip_ratio": {"100_sku": 0.2, "500_sku": 0.2},
+      "entropy_coefficient": {"100_sku": 0.02, "500_sku": 0.025},
+      "value_function_coefficient": {"100_sku": 0.5, "500_sku": 0.5},
+      "discount_factor": {"100_sku": 0.99, "500_sku": 0.995},
+      "gbm_library_bl2_bl3": "XGBoost",
+      "bl2_bl3_n_estimators": {"100_sku": 200, "500_sku": 300}
+    },
+    "supplier_scoring_weights": {
+      "alpha_1_unit_cost": {"100_sku": 0.45, "500_sku": 0.40},
+      "alpha_2_lead_time": {"100_sku": 0.25, "500_sku": 0.25},
+      "alpha_3_reliability": {"100_sku": 0.20, "500_sku": 0.25},
+      "alpha_4_moq_penalty": {"100_sku": 0.10, "500_sku": 0.10}
+    },
+    "constraints": {
+      "purchasing_budget_B": {"100_sku": 1.2e5, "500_sku": 5.5e5},
+      "warehouse_capacity_V": {"100_sku": 9.0e3, "500_sku": 4.5e4}
+    }
+  },
+  "baselines": {
+    "bl1": {"name": "ROP-EOQ", "safety_factor_z": 1.645, "service_level": 0.95, "rolling_window_periods": 30},
+    "bl2": {"name": "ML + Static", "model": "XGBoost", "adaptive": false},
+    "bl3": {"name": "ML + Adaptive", "model": "XGBoost", "safety_stock": "z * sigma_hat_it from rolling forecast-error std"},
+    "bl4": {"name": "Per-SKU DQN", "style": "Oroojlooyjadid et al. 2022", "coordination": false},
+    "bl5": {"name": "MAPPO", "style": "Yu et al. 2022 (CTDE)", "centralized_critic": true, "governance": false}
+  }
+}

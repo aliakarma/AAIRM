@@ -1,0 +1,18 @@
+# ===========================================================================
+# Pareto Cost-Service Frontier — product.tex Figure fig:pareto
+# ===========================================================================
+# Sweeps the stockout penalty weight w_p (all other reward weights fixed) at
+# 100 SKUs over 10 seeds, retraining the C2 policy at each setting, to trace
+# the cost-service frontier. A commercially standard 97% fill rate (3%
+# stockout) is achievable at ~0.93 cost, retaining a 7-8 pp advantage over BL1.
+
+base_config: configs/primary_100sku.yaml
+
+pareto:
+  reward_weight: stockout_penalty_weight
+  sweep: [1.2, 2.0, 3.0, 5.0, 8.0]
+  retrain_per_point: true
+  n_seeds: 10
+
+canonical_fixture: figure_pareto
+results_dir: experiments/results/pareto

@@ -1,0 +1,51 @@
+{
+  "table": "tab:btl-results",
+  "title": "Blockchain Trust Ledger evaluation on the four-organization permissioned testbed. Centralized-log comparison uses an append-only PostgreSQL table on the same workstation.",
+  "network": {
+    "organizations": 4,
+    "org_roles": ["retailer", "supplier consortium representative", "logistics provider", "independent auditor"],
+    "peers_per_org": 1,
+    "raft_orderers": 3,
+    "batch_timeout_s": 0.5,
+    "batch_size_tx": 50
+  },
+  "metrics": {
+    "mean_commit_latency_ms": {"btl": 142, "centralized_log": 9},
+    "p95_commit_latency_ms": {"btl": 287, "centralized_log": 21},
+    "sustained_throughput_tx_s": {"btl": 310, "centralized_log": ">5000"},
+    "audit_query_latency_ms": {"btl": 38, "centralized_log": 9},
+    "storage_per_event_kb": {"btl": 1.9, "centralized_log": 0.6},
+    "decision_cycle_overhead_pct": {"btl": 6.6, "centralized_log": "<0.5"},
+    "injected_mutation_detection_500": {"btl": "500/500", "centralized_log": "0/500"},
+    "tamper_evidence_insider_mutation": {"btl": "Yes (multi-org consensus)", "centralized_log": "No (single trust domain)"}
+  },
+  "latency_context": {
+    "decision_cycle_baseline_s": 3.2,
+    "decision_cycle_with_async_btl_s": 3.41,
+    "overhead_pct": 6.6,
+    "anchoring": "asynchronous (pipeline proceeds on submit, commit confirmed by callback)"
+  },
+  "mutation_replay": {
+    "events_replayed": 10000,
+    "mutated_cases": 500,
+    "detected": 500,
+    "false_positives": 0,
+    "unmutated_events": 9500,
+    "hash": "SHA-256"
+  },
+  "load_projection": {
+    "decisions_per_day": 1000,
+    "events_per_decision": 5,
+    "events_per_day": 5000,
+    "mean_offered_load_tx_s": "<0.1",
+    "headroom_factor": ">3000x",
+    "yearly_storage_per_peer_gb": 3.5
+  },
+  "throughput_figure": {
+    "label": "fig:btl-throughput",
+    "xlabel": "Offered load (tx/s)",
+    "ylabel": "Mean commit latency (ms)",
+    "curve": [[25, 131], [50, 136], [100, 142], [150, 151], [200, 167], [250, 196], [300, 268], [330, 452], [360, 790], [390, 1180]],
+    "sustained_capacity_tx_s": 310
+  }
+}

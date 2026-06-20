@@ -1,0 +1,17 @@
+{
+  "table": "tab:dryfruits-recal",
+  "title": "Dry-fruits category recalibration at 500-SKU scale via category-specific stockout penalty weight w_p^DF. Costs normalized to BL1 on the dry-fruits category. Default row reproduces the 31.54% failure; recalibration trades spoilage for service monotonically (5 seeds each).",
+  "scale": "500-SKU",
+  "n_skus": 500,
+  "n_seeds": 5,
+  "category": "dry_fruits",
+  "default_w_p": 1.2,
+  "sweep": [
+    {"w_p": 1.2, "label": "1.2 (default, verified)", "stockout_rate": {"mean": 31.54, "std": 3.10}, "fill_rate": {"mean": 68.46, "std": 3.10}, "df_cost": {"mean": 0.742, "std": 0.041}, "spoilage_rate": {"mean": 4.10, "std": 0.62}},
+    {"w_p": 3.0, "label": "3.0", "stockout_rate": {"mean": 14.8, "std": 2.4}, "fill_rate": {"mean": 85.2, "std": 2.4}, "df_cost": {"mean": 0.859, "std": 0.034}, "spoilage_rate": {"mean": 7.9, "std": 0.9}},
+    {"w_p": 6.0, "label": "6.0", "stockout_rate": {"mean": 7.2, "std": 1.6}, "fill_rate": {"mean": 92.8, "std": 1.6}, "df_cost": {"mean": 0.927, "std": 0.030}, "spoilage_rate": {"mean": 11.9, "std": 1.1}},
+    {"w_p": 9.0, "label": "9.0", "stockout_rate": {"mean": 4.7, "std": 1.2}, "fill_rate": {"mean": 95.3, "std": 1.2}, "df_cost": {"mean": 0.973, "std": 0.028}, "spoilage_rate": {"mean": 13.6, "std": 1.8}}
+  ],
+  "recommended_w_p": 9.0,
+  "note": "Raising w_p^DF from 1.2 to 9.0 lifts fill rate from 68.5% to 95.3% while normalized category cost stays 0.973 (below ROP-EOQ), at the cost of higher spoilage."
+}

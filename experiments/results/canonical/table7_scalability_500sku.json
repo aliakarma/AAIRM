@@ -1,0 +1,55 @@
+{
+  "table": "tab:scalability-overview",
+  "title": "Overall performance comparison at 500-SKU scale (5 seeds, 42-46). Total cost normalized to BL1 per seed. AAIRM aggregate includes dry fruits (31.54% stockout, reward miscalibration); ex-dry-fruits row excludes that category.",
+  "scale": "500-SKU",
+  "n_skus": 500,
+  "seeds": [42, 43, 44, 45, 46],
+  "n_seeds": 5,
+  "policies": {
+    "baseline1": {
+      "label": "Baseline 1 (ROP-EOQ)",
+      "stockout_rate": {"mean": 1.23, "std": 0.20},
+      "fill_rate": {"mean": 98.77, "std": 0.20},
+      "avg_inventory": {"mean": 7.12, "std": 0.11},
+      "total_cost": {"mean": 1.000, "std": 0.000},
+      "spoilage_rate": {"mean": 5.99, "std": 0.30}
+    },
+    "baseline2": {
+      "label": "Baseline 2 (ML + Static)",
+      "stockout_rate": {"mean": 5.24, "std": 0.81},
+      "fill_rate": {"mean": 94.76, "std": 0.81},
+      "avg_inventory": {"mean": 7.99, "std": 1.23},
+      "total_cost": {"mean": 1.203, "std": 0.094},
+      "spoilage_rate": {"mean": 5.88, "std": 0.89}
+    },
+    "baseline3": {
+      "label": "Baseline 3 (ML + Adaptive)",
+      "stockout_rate": {"mean": 3.10, "std": 0.71},
+      "fill_rate": {"mean": 96.90, "std": 0.71},
+      "avg_inventory": {"mean": 6.51, "std": 0.33},
+      "total_cost": {"mean": 0.948, "std": 0.027},
+      "spoilage_rate": {"mean": 5.52, "std": 0.61}
+    },
+    "aairm_all": {
+      "label": "AAIRM (proposed, all categories)",
+      "stockout_rate": {"mean": 14.34, "std": 1.85},
+      "fill_rate": {"mean": 85.66, "std": 1.85},
+      "avg_inventory": {"mean": 4.64, "std": 0.06, "best": true},
+      "total_cost": {"mean": 0.829, "std": 0.017, "best": true},
+      "spoilage_rate": {"mean": 3.51, "std": 0.30, "best": true}
+    },
+    "aairm_excl_dryfruits": {
+      "label": "AAIRM (excl. dry fruits)",
+      "stockout_rate": {"mean": 9.90, "std": 1.12},
+      "fill_rate": {"mean": 90.10, "std": 1.12},
+      "avg_inventory": {"mean": 4.71, "std": 0.07},
+      "total_cost": {"mean": 0.871, "std": 0.019},
+      "spoilage_rate": {"mean": 2.96, "std": 0.24}
+    }
+  },
+  "derived": {
+    "cost_reduction_all_pct": 17.1,
+    "cost_reduction_excl_dryfruits_pct": 12.9,
+    "dryfruits_stockout_pct": 31.54
+  }
+}

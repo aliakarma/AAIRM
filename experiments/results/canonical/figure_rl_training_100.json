@@ -1,0 +1,22 @@
+{
+  "figure": "fig:rl-training-100",
+  "title": "Mean normalized per-episode cost of the Reorder Optimization Agent (C2) across 10 seeds in the 100-SKU experiment (first 30 of 200 episodes shown). Each seed's episode costs normalized by its own episode-1 (random-policy) cost.",
+  "scale": "100-SKU",
+  "n_skus": 100,
+  "n_seeds": 10,
+  "total_episodes": 200,
+  "xlabel": "Training episode",
+  "ylabel": "Mean normalized episode cost",
+  "normalization": "per-seed episode-1 (random-policy) cost",
+  "curve_first_30": [
+    [1, 1.000], [2, 0.896], [3, 0.806], [4, 0.743], [5, 0.690],
+    [6, 0.649], [7, 0.571], [8, 0.508], [9, 0.473], [10, 0.442],
+    [11, 0.403], [12, 0.419], [13, 0.427], [14, 0.403], [15, 0.391],
+    [16, 0.400], [17, 0.402], [18, 0.394], [19, 0.398], [20, 0.410],
+    [21, 0.418], [22, 0.426], [23, 0.412], [24, 0.390], [25, 0.388],
+    [26, 0.384], [27, 0.382], [28, 0.400], [29, 0.408], [30, 0.418]
+  ],
+  "plateau_mean": 0.406,
+  "plateau_range": [0.38, 0.43],
+  "relation_to_rop_eoq": "convergence to ~0.41 of random-policy cost corresponds to ~0.87 of the ROP-EOQ cost (Table tab:results-overview)"
+}

@@ -1,0 +1,21 @@
+{
+  "table": "tab:m5-results",
+  "title": "External validation on the M5 dataset, reported alongside synthetic-evaluation figures. WRMSSE is the official M5 accuracy metric; cost reduction is relative to ROP-EOQ on the M5 replenishment simulation.",
+  "dataset": {
+    "name": "M5 Forecasting Competition",
+    "products": 3049,
+    "states": 3,
+    "stores": 10,
+    "categories": 3,
+    "days": 1941,
+    "federated_clients": 10,
+    "comparators": ["ROP-EOQ (BL1)", "ML+Adaptive (BL3)", "MAPPO (BL5)"]
+  },
+  "rows": {
+    "c1_wrmsse_centralized": {"label": "C1 forecast WRMSSE (centralized)", "synthetic": "n/a", "m5": 0.66},
+    "fdl_penalty_vs_centralized_wape_pp": {"label": "FDL penalty vs. centralized (WAPE pp)", "synthetic": 0.9, "m5": 1.65},
+    "cost_reduction_vs_rop_eoq_pct": {"label": "Cost reduction vs. ROP-EOQ (%)", "synthetic": 13.2, "m5": 10.2},
+    "cost_reduction_vs_mappo_pct": {"label": "Cost reduction vs. MAPPO (%)", "synthetic": 1.9, "m5": "+2.0"},
+    "fill_rate_default_wp_pct": {"label": "Fill rate at default w_p (%)", "synthetic": 92.3, "m5": 91.2}
+  }
+}

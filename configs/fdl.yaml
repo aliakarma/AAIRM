@@ -1,0 +1,24 @@
+# ===========================================================================
+# Federated Demand Learning Evaluation — product.tex Table 9 (tab:fdl-results)
+# ===========================================================================
+# Partitions the 100-SKU demand environment across K=8 non-IID stores
+# (Dirichlet category mix, beta=0.5). Trains the C1 LSTM forecaster under
+# centralized / FedAvg / FedProx / local-only regimes; FedAvg & FedProx run
+# 60 communication rounds with E=2 local epochs. Each round's aggregated
+# parameter digest is anchored in the Blockchain Trust Ledger.
+
+base_config: configs/primary_100sku.yaml
+
+fdl:
+  n_stores: 8                       # K = 8 federated clients
+  dirichlet_beta: 0.5               # moderate inter-store heterogeneity
+  communication_rounds: 60          # U
+  local_epochs: 2                   # E
+  fedprox_mu: 0.01                  # proximal coefficient
+  local_lr: 0.05
+  regimes: [centralized, fedprox, fedavg, local_only]
+  anchor_param_digests: true        # anchor H(theta^(u+1)) in the BTL
+  n_seeds: 10
+
+canonical_fixture: table9_fdl
+results_dir: experiments/results/fdl
