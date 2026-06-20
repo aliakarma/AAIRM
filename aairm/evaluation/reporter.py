@@ -207,21 +207,21 @@ class Reporter:
 
     def save_latex_table3(self) -> None:
         """Write per-category Table 3 with paper expected values as fallback."""
-        # Per-category expected values (paper Table 3)
+        # Per-category expected values (product.tex Table 6, 100-SKU, 10 seeds).
         EXPECTED: dict[str, dict[str, dict[str, float]]] = {
             "baseline1": {
-                "grocery": {"stockout_rate": 0.074, "fill_rate": 0.938, "spoilage_rate": None},
-                "frozen_food": {"stockout_rate": 0.118, "fill_rate": 0.902, "spoilage_rate": 0.063},
-                "apparel": {"stockout_rate": 0.065, "fill_rate": 0.944, "spoilage_rate": None},
-                "cosmetics": {"stockout_rate": 0.091, "fill_rate": 0.921, "spoilage_rate": 0.037},
-                "dry_fruits": {"stockout_rate": 0.087, "fill_rate": 0.931, "spoilage_rate": 0.041},
+                "grocery": {"stockout_rate": 0.0116, "fill_rate": 0.9884, "spoilage_rate": None},
+                "frozen_food": {"stockout_rate": 0.0118, "fill_rate": 0.9882, "spoilage_rate": 0.0693},
+                "apparel": {"stockout_rate": 0.0035, "fill_rate": 0.9965, "spoilage_rate": None},
+                "cosmetics": {"stockout_rate": 0.0106, "fill_rate": 0.9894, "spoilage_rate": 0.0530},
+                "dry_fruits": {"stockout_rate": 0.0151, "fill_rate": 0.9849, "spoilage_rate": 0.1520},
             },
             "aairm": {
-                "grocery": {"stockout_rate": 0.032, "fill_rate": 0.981, "spoilage_rate": None},
-                "frozen_food": {"stockout_rate": 0.049, "fill_rate": 0.969, "spoilage_rate": 0.028},
-                "apparel": {"stockout_rate": 0.028, "fill_rate": 0.987, "spoilage_rate": None},
-                "cosmetics": {"stockout_rate": 0.043, "fill_rate": 0.974, "spoilage_rate": 0.016},
-                "dry_fruits": {"stockout_rate": 0.043, "fill_rate": 0.979, "spoilage_rate": 0.020},
+                "grocery": {"stockout_rate": 0.0913, "fill_rate": 0.9087, "spoilage_rate": None},
+                "frozen_food": {"stockout_rate": 0.0662, "fill_rate": 0.9338, "spoilage_rate": 0.0518},
+                "apparel": {"stockout_rate": 0.0354, "fill_rate": 0.9646, "spoilage_rate": None},
+                "cosmetics": {"stockout_rate": 0.0741, "fill_rate": 0.9259, "spoilage_rate": 0.0392},
+                "dry_fruits": {"stockout_rate": 0.0775, "fill_rate": 0.9225, "spoilage_rate": 0.1203},
             },
         }
 
@@ -267,8 +267,8 @@ class Reporter:
 
         lines += [
             r"\midrule",
-            r"\textbf{Overall} & \textbf{8.7} & \textbf{3.9} & "
-            r"\textbf{93.1} & \textbf{97.8} & \textemdash & \textemdash \\",
+            r"\textbf{Overall} & \textbf{1.19} & \textbf{7.71} & "
+            r"\textbf{98.81} & \textbf{92.29} & \textemdash & \textemdash \\",
             r"\bottomrule",
             r"\end{tabular}",
             r"\end{table*}",
