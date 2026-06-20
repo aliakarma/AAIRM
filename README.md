@@ -85,8 +85,7 @@ At 500 SKUs, AAIRM preserves a clear cost advantage (0.8292 vs 1.2033 for Baseli
 ### Full paper reproduction
 
 Every table and figure in the paper is reproduced from the verified, published
-results in `experiments/results/canonical/` (the exact paper numbers, confirmed
-on the lab's experimental infrastructure). Run all of them:
+results in `experiments/results/canonical/`. Run all of them:
 
 ```bash
 python experiments/run_all_paper.py
