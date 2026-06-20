@@ -223,9 +223,9 @@ class GovernanceConfig(BaseSettings):
             "require human approval before execution."
         ),
     )
-    frozen_zone_capacity: float = Field(20_000.0, gt=0.0,
+    frozen_zone_capacity: float = Field(20_000.0, ge=0.0,
         description="Cold-storage capacity in volumetric units.")
-    ambient_zone_capacity: float = Field(80_000.0, gt=0.0,
+    ambient_zone_capacity: float = Field(80_000.0, ge=0.0,
         description="Ambient-storage capacity in volumetric units.")
 
 

@@ -17,7 +17,9 @@ ENV/
 # Data — never commit raw or processed datasets
 data/raw/
 data/processed/
-experiments/results/
+experiments/results/*
+# but keep the verified, published paper results (source of truth) tracked
+!experiments/results/canonical/
 checkpoints/
 *.csv
 *.parquet
@@ -75,4 +77,5 @@ kaggle.json
 .ruff_cache/
 
 # Generated figures (re-run reporter to regenerate)
-experiments/results/
+experiments/results/*
+!experiments/results/canonical/

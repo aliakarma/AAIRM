@@ -46,7 +46,8 @@ class NegotiationAgent(BaseAgent):
     def __init__(self, config: LLMConfig, use_llm: bool = False) -> None:
         super().__init__("C4", config)
         self._use_llm = use_llm and bool(os.getenv("OPENAI_API_KEY"))
-        self._llm_executor: Any = None        self.recent_allocations: dict[str, float] = {}  # rolling 14-day supplier allocations
+        self._llm_executor: Any = None
+        self.recent_allocations: dict[str, float] = {}  # rolling 14-day supplier allocations
         if self._use_llm:
             self._llm_executor = self._build_llm_executor(config)
 
